@@ -1,0 +1,24 @@
+RUN GUIDE — SQLITE BACKEND PACKAGE
+
+1. Extract the ZIP package.
+2. Keep the face-api model files in a folder named "models" beside index.html if you want local model loading.
+3. Start the app with one of these:
+   - Windows: double-click start_server.bat
+   - Terminal: python server.py
+4. Open http://127.0.0.1:8000 in Chrome or Edge.
+5. Default password: CPE26
+
+WHAT IS STORED IN THE BACKEND
+- settings
+- remembered login session
+- participant counter
+- captured records
+- reports
+
+DATABASE FILE
+- data/dashboard.sqlite3
+
+IMPORTANT
+- The browser still keeps a local cache so the UI can recover if the backend is temporarily unavailable.
+- The backend is the main persistence layer in this package.
+- If you previously used the localStorage-only build, opening this package will seed the SQLite database from the browser cache on first sync.

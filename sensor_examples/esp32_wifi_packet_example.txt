@@ -1,0 +1,1 @@
+Send newline JSON packets over WebSocket, e.g. {"hr":82,"eda":2.91,"temp":36.7,"motion":41,"spo2":98,"bvp":71,"battery":94}

@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CNN-LSTM Mental Health Detection System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script> -->
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script> 
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+  <script defer src="https://unpkg.com/lucide@latest"></script>
+  <script defer src="main.js"></script>
+  <script defer src="main_extension.js"></script>
+  <script defer src="lstm_predictor.js"></script>
+  <script defer src="main_backend.js"></script>
+</head>
+<body class="auth-locked" data-theme="royal-violet" data-appearance="light">
+  <div class="bg-orbs">
+    <span class="orb orb-1"></span>
+    <span class="orb orb-2"></span>
+    <span class="orb orb-3"></span>
+    <span class="orb orb-4"></span>
+  </div>
+
+  <div class="login-overlay" id="loginOverlay">
+    <div class="login-shell">
+      <section class="splash-panel">
+        <div class="splash-brand">
+          <div class="splash-icon"><i data-lucide="brain-circuit"></i></div>
+          <div>
+            <h1>PSYCHESCAN</h1>
+            <p>A Real-Time Mental Health Detection System Using Vital Sign Sensors with Hybrid CNN-LSTM Algorithms for In-Depth Analysis of Stress and Anxiety Parameters</p>
+          </div>
+        </div>
+
+        <div class="splash-grid">
+          <div class="splash-card">
+            <i data-lucide="scan-face"></i>
+            <div>
+              <strong>Real facial pipeline</strong>
+              <span>Face detection, landmarks, expression probabilities, and visual fatigue cues from the live camera feed.</span>
+            </div>
+          </div>
+          <div class="splash-card">
+            <i data-lucide="cpu"></i>
+            <div>
+              <strong>Real sensor intake</strong>
+              <span>HR, GSR, temperature, and motion update from the same serial packet and stay disconnected until truly detected.</span>
+            </div>
+          </div>
+          <div class="splash-card">
+            <i data-lucide="activity"></i>
+            <div>
+              <strong>Temporal tracking</strong>
+              <span>Sequence-based trend engine, evidence scoring, and longitudinal review for respondent monitoring.</span>
+            </div>
+          </div>
+          <div class="splash-card">
+            <i data-lucide="presentation"></i>
+            <div>
+              <strong>Secure local workspace</strong>
+              <span>Clean operator login, backend-synced storage, audit-friendly reports, and transport-ready sensor controls.</span>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <section class="login-panel panel">
+        <div class="login-head">
+          <span class="login-badge">Secure access</span>
+          <h2>Sign in to the console</h2>
+          <p>Use the operator key to unlock the camera, sensor hub, and database-backed sessions.</p>
+        </div>
+
+        <form id="loginForm" class="login-form">
+          <label class="setting-row">
+            <span>Operator ID</span>
+            <input type="text" id="loginName" placeholder="Enter operator ID" autocomplete="username" />
+          </label>
+
+          <label class="setting-row">
+            <span>Password</span>
+            <input type="password" id="loginPassword" placeholder="Enter password" autocomplete="current-password" />
+          </label>
+
+          <div class="login-meta">
+            <div class="demo-passcode">
+              <i data-lucide="key-round"></i>
+              <span>Default local key: <strong>CPE26</strong></span>
+            </div>
+            <label class="remember-row">
+              <input type="checkbox" id="rememberLogin" checked />
+              <span>Keep this session cached in the browser</span>
+            </label>
+          </div>
+
+          <button type="submit" class="action-btn wide-btn">
+            <i data-lucide="log-in"></i>
+            Unlock Workspace
+          </button>
+
+          <p class="login-error" id="loginError">Incorrect key. Use CPE26.</p>
+        </form>
+
+        <div class="login-footnote">
+          This platform is for screening, monitoring, and research demonstration. It is not a clinical diagnosis tool.
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="app-shell">
+    <aside class="sidebar panel">
+      <div class="brand">
+        <div class="brand-icon"><i data-lucide="brain-circuit"></i></div>
+        <div>
+          <h1>CNN-LSTM</h1>
+          <p>Mental Health Detection System</p>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav" id="sidebarNav">
+        <button class="nav-item active" data-page="dashboard"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></button>
+        <button class="nav-item" data-page="live"><i data-lucide="camera"></i><span>Live Monitoring</span></button>
+        <button class="nav-item" data-page="cnn"><i data-lucide="scan-face"></i><span>CNN Analysis</span></button>
+        <button class="nav-item" data-page="temporal"><i data-lucide="activity"></i><span>Temporal Engine</span></button>
+        <button class="nav-item" data-page="sensors"><i data-lucide="cpu"></i><span>Sensors</span></button>
+        <button class="nav-item" data-page="summary"><i data-lucide="file-heart"></i><span>Status Summary</span></button>
+        <button class="nav-item" data-page="info"><i data-lucide="book-open-text"></i><span>Mental Health Info</span></button>
+        <button class="nav-item" data-page="inputs"><i data-lucide="database"></i><span>Data Inputs</span></button>
+        <button class="nav-item" data-page="reports"><i data-lucide="file-text"></i><span>Reports</span></button>
+        <button class="nav-item" data-page="settings"><i data-lucide="settings-2"></i><span>Settings</span></button>
+      </nav>
+
+      <div class="sidebar-footer soft-panel">
+        <div class="footer-label">Session Workspace</div>
+        <div class="footer-value">SQLite Backend Mode</div>
+        <div class="footer-sub">Auto participant IDs are generated when a new face session is detected.</div>
+
+        <div class="bullet-card compact-card top-gap">
+          <h4>Backend database storage</h4>
+          <p>Sessions, records, reports, and participant indexing are synchronized to the local SQLite database, with browser cache used as fallback.</p>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <header class="topbar panel">
+        <div>
+          <h2 id="pageTitle">Dashboard</h2>
+          <p id="pageSubtitle">Professional workspace for real-time camera and biometric monitoring</p>
+        </div>
+
+        <div class="topbar-right">
+          <div class="pill" id="clockPill">Loading...</div>
+
+          <div class="mode-switch">
+            <button class="mode-btn active" data-mode="Real-Time">Real-Time</button>
+            <button class="mode-btn" data-mode="Review">Review</button>
+          </div>
+
+          <div class="pill accent" id="systemStatus">Ready</div>
+
+          <button class="icon-btn" id="logoutBtn" title="Logout"><i data-lucide="log-out"></i></button>
+        </div>
+      </header>
+
+      <section class="page-section active-section" id="dashboardPage">
+        <div class="metrics-grid">
+          <div class="metric-card panel">
+            <div class="metric-head"><span class="metric-icon"><i data-lucide="shield-alert"></i></span><span class="metric-label">Integrated Level</span></div>
+            <div class="metric-value" id="metricStress">Minimal</div>
+            <div class="metric-note">Live fusion from currently available inputs</div>
+          </div>
+          <div class="metric-card panel">
+            <div class="metric-head"><span class="metric-icon"><i data-lucide="badge-percent"></i></span><span class="metric-label">Face Confidence</span></div>
+            <div class="metric-value" id="metricCnn">0%</div>
+            <div class="metric-note">Smoothed dominant emotion confidence</div>
+          </div>
+          <div class="metric-card panel">
+            <div class="metric-head"><span class="metric-icon"><i data-lucide="waves"></i></span><span class="metric-label">Temporal Stability</span></div>
+            <div class="metric-value" id="metricTemporal">High</div>
+            <div class="metric-note" id="metricTemporalNote">0.87 stability score</div>
+          </div>
+          <div class="metric-card panel">
+            <div class="metric-head"><span class="metric-icon"><i data-lucide="heart-pulse"></i></span><span class="metric-label">Sensor Sync</span></div>
+            <div class="metric-value" id="metricSync">0 / 4</div>
+            <div class="metric-note">Simultaneous sensor availability</div>
+          </div>
+        </div>
+
+        <div class="panel card">
+          <div class="card-title-row">
+            <h3>Processing Pipeline</h3>
+            <span class="status-badge muted" id="pipelineBadge">Live workflow</span>
+          </div>
+          <div class="pipeline-grid">
+            <div class="pipeline-step"><strong>1. Face Detection</strong><span>TinyFaceDetector</span><small>Real browser inference</small></div>
+            <div class="pipeline-step"><strong>2. Landmark Extraction</strong><span>68-point mapping</span><small>Eye and skin region anchors</small></div>
+            <div class="pipeline-step"><strong>3. CNN Expression Scoring</strong><span>7 emotion classes</span><small>Frame smoothing</small></div>
+            <div class="pipeline-step"><strong>4. Sensor Fusion</strong><span>HR · GSR · Temp · Motion</span><small>Same-cycle packet updates</small></div>
+            <div class="pipeline-step"><strong>5. Temporal Sequence</strong><span>Rolling risk engine</span><small>Ready for LSTM backend</small></div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>Camera Preview</h3>
+              <span class="status-badge muted" id="cameraBadge">READY</span>
+            </div>
+            <div class="camera-shell">
+              <video id="video" class="camera-video mirrored" width="640" height="480" autoplay muted playsinline></video>
+              <canvas id="overlay" class="camera-overlay mirrored"></canvas>
+              <div class="camera-top">
+                <span class="camera-chip" id="faceCountText">0 face</span>
+                <span class="camera-chip" id="cameraTime">--:--:--</span>
+              </div>
+              <div class="camera-bottom">
+                <span id="dominantEmotion">No Face</span>
+                <span id="dominantConfidence">0%</span>
+              </div>
+            </div>
+
+            <div class="button-row">
+              <button class="action-btn" id="loadModelsBtn"><i data-lucide="database-zap"></i>Load Models</button>
+              <button class="action-btn" id="startCameraBtn"><i data-lucide="play"></i>Start Camera</button>
+              <button class="action-btn secondary" id="stopCameraBtn"><i data-lucide="square"></i>Stop</button>
+            </div>
+          </div>
+
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>Biometric Sensor Hub</h3>
+              <span class="status-badge muted" id="serialBadge">DISCONNECTED</span>
+            </div>
+            <div class="sensor-grid" id="sensorGrid"></div>
+
+            <div class="transport-grid top-gap">
+              <label class="setting-row compact-setting">
+                <span>Wi-Fi / WebSocket URL</span>
+                <input type="text" id="wsUrlInput" value="ws://192.168.4.1:81" placeholder="ws://192.168.4.1:81" />
+              </label>
+              <label class="setting-row compact-setting">
+                <span>BLE Service UUID</span>
+                <input type="text" id="bleServiceUuidInput" value="6e400001-b5a3-f393-e0a9-e50e24dcca9e" />
+              </label>
+              <label class="setting-row compact-setting">
+                <span>BLE Characteristic UUID</span>
+                <input type="text" id="bleCharacteristicUuidInput" value="6e400003-b5a3-f393-e0a9-e50e24dcca9e" />
+              </label>
+            </div>
+
+            <div class="button-row">
+              <button class="action-btn" id="connectSerialBtn"><i data-lucide="plug-zap"></i>USB / Serial</button>
+              <button class="action-btn" id="connectBleBtn"><i data-lucide="bluetooth"></i>Bluetooth LE</button>
+              <button class="action-btn" id="connectWsBtn"><i data-lucide="wifi"></i>Wi-Fi Socket</button>
+              <button class="action-btn secondary" id="disconnectAllBtn"><i data-lucide="plug-2"></i>Disconnect All</button>
+            </div>
+
+            <p class="subtext top-gap">The hub accepts newline JSON packets from Arduino, ESP32, BLE bridges, and Wi-Fi bridges. Sensors only turn active after real values or flags are received.</p>
+          </div>
+        </div>
+
+        <div class="card panel">
+          <div class="card-title-row">
+            <h3>Integrated Trend Timeline</h3>
+          </div>
+          <div class="chart-wrap"><canvas id="dashboardChart"></canvas></div>
+        </div>
+      </section>
+
+      <section class="page-section" id="livePage">
+        <div class="grid-2">
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>Live Monitoring Feed</h3>
+              <span class="status-badge muted" id="liveStatusBadge">IDLE</span>
+            </div>
+
+            <div class="camera-shell live-shell">
+              <video id="liveVideo" class="camera-video mirrored" width="640" height="480" autoplay muted playsinline></video>
+              <canvas id="liveOverlay" class="camera-overlay mirrored"></canvas>
+            </div>
+
+            <div class="mini-stat-grid">
+              <div class="mini-stat"><span>Heart Rate</span><strong id="liveHr">--</strong></div>
+              <div class="mini-stat"><span>GSR</span><strong id="liveGsr">--</strong></div>
+              <div class="mini-stat"><span>Temperature</span><strong id="liveTemp">--</strong></div>
+              <div class="mini-stat"><span>Motion</span><strong id="liveMotion">--</strong></div>
+            </div>
+
+            <div class="mini-stat-grid">
+              <div class="mini-stat"><span>Eyebag Score</span><strong id="eyebagScore">0%</strong></div>
+              <div class="mini-stat"><span>Wrinkle Score</span><strong id="wrinkleScore">0%</strong></div>
+              <div class="mini-stat"><span>Visual Fatigue</span><strong id="fatigueScore">0%</strong></div>
+              <div class="mini-stat"><span>Evidence Window</span><strong id="evidenceWindow">20 samples</strong></div>
+            </div>
+          </div>
+
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>Emotion Probability Distribution</h3>
+            </div>
+            <div class="prob-list" id="probabilityList"></div>
+          </div>
+        </div>
+
+        <div class="card panel">
+          <div class="card-title-row">
+            <h3>Biometric Timeline</h3>
+          </div>
+          <div class="chart-wrap large"><canvas id="liveChart"></canvas></div>
+        </div>
+      </section>
+
+      <section class="page-section" id="cnnPage">
+        <div class="grid-2 cnn-grid">
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>CNN Feature Map Visualization</h3>
+            </div>
+            <div class="feature-map"><canvas id="featureCanvas"></canvas></div>
+          </div>
+
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>CNN Extraction Details</h3>
+            </div>
+            <div class="info-stack">
+              <div class="info-block"><span>Primary emotion</span><strong id="cnnTopEmotion">Neutral</strong></div>
+              <div class="info-block"><span>Dominant confidence</span><strong id="cnnConfidence">0%</strong></div>
+              <div class="info-block"><span>Eyebag indicator</span><strong id="cnnEyeIndicator">0%</strong></div>
+              <div class="info-block"><span>Wrinkle texture</span><strong id="cnnWrinkleIndicator">0%</strong></div>
+              <div class="info-block"><span>Fatigue indicator</span><strong id="cnnFatigueIndicator">0%</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card panel">
+          <div class="card-title-row">
+            <h3>Expression Probabilities</h3>
+          </div>
+          <div class="prob-list" id="cnnProbList"></div>
+        </div>
+      </section>
+
+      <section class="page-section" id="temporalPage">
+        <div class="card panel">
+          <div class="card-title-row">
+            <h3>Temporal Sequence Engine</h3>
+          </div>
+          <div class="chart-wrap large"><canvas id="temporalChart"></canvas></div>
+          <p class="subtext top-gap">Current implementation uses a real rolling sequence risk engine from the captured inputs and is ready to hand off to a trained CNN-LSTM backend later.</p>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric-card panel small-card">
+            <div class="metric-head"><span class="metric-icon"><i data-lucide="binary"></i></span><span class="metric-label">Window Size</span></div>
+            <div class="metric-value small-value" id="windowSizeValue">20</div>
+            <div class="metric-note">Most recent evidence samples</div>
+          </div>
+          <div class="metric-card panel small-card">
+            <div class="metric-head"><span class="metric-icon"><i data-lucide="trending-up"></i></span><span class="metric-label">Trend</span></div>
+            <div class="metric-value small-value" id="trendValue">Stable</div>
+            <div class="metric-note">Direction of integrated score</div>
+          </div>
+          <div class="metric-card panel small-card">
+            <div class="metric-head"><span class="metric-icon"><i data-lucide="brain-circuit"></i></span><span class="metric-label">Sequence Score</span></div>
+            <div class="metric-value small-value" id="sequenceScore">0.87</div>
+            <div class="metric-note">Volatility-based stability</div>
+          </div>
+          <div class="metric-card panel small-card">
+            <div class="metric-head"><span class="metric-icon"><i data-lucide="siren"></i></span><span class="metric-label">Risk Output</span></div>
+            <div class="metric-value small-value" id="riskOutput">Low</div>
+            <div class="metric-note">Evidence-based risk flag</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page-section" id="sensorsPage">
+        <div class="grid-2">
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>Sensor Status</h3>
+            </div>
+            <div class="sensor-grid" id="sensorPageGrid"></div>
+          </div>
+
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>Transport Bridge & Packet Schema</h3>
+            </div>
+            <div class="mini-stat-grid tight-grid">
+              <div class="mini-stat"><span>USB / Serial</span><strong>Arduino · CH340 · CP210x</strong></div>
+              <div class="mini-stat"><span>Bluetooth LE</span><strong>ESP32 BLE / HM-10 style bridge</strong></div>
+              <div class="mini-stat"><span>Wi-Fi</span><strong>WebSocket from ESP32 / Node relay</strong></div>
+              <div class="mini-stat"><span>Storage</span><strong>SQLite + local cache</strong></div>
+            </div>
+            <pre class="code-block" id="serialFormatBlock">{"hr":82,"gsr":2.91,"temp":36.7,"motion":41,"HW827":true,"gsrConnected":true,"ds18b20":true,"mpu6050":true}</pre>
+            <div class="button-row">
+              <button class="action-btn" id="connectBlePageBtn"><i data-lucide="bluetooth"></i>BLE Connect</button>
+              <button class="action-btn" id="connectWsPageBtn"><i data-lucide="wifi"></i>Wi-Fi Connect</button>
+              <button class="action-btn secondary" id="disconnectPageBtn"><i data-lucide="plug-2"></i>Disconnect All</button>
+            </div>
+            <div class="info-stack compact">
+              <div class="info-block"><span>Last packet time</span><strong id="lastPacketTime">No packet received</strong></div>
+              <div class="info-block"><span>Last raw packet</span><strong id="lastPacketRaw">—</strong></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page-section" id="summaryPage">
+        <div class="grid-2">
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>Participant Mental Health Status Summary</h3>
+              <span class="status-badge muted" id="summaryStatusBadge">No active evidence</span>
+            </div>
+
+            <div class="summary-hero">
+              <div class="summary-pill" id="summaryOkayValue">OKAY</div>
+              <div>
+                <h4 id="summaryHeadline">Insufficient live evidence</h4>
+                <p id="summaryNarrative">Start the camera and/or connect sensors to generate a current participant screening summary.</p>
+              </div>
+            </div>
+
+            <div class="info-stack">
+              <div class="info-block"><span>Integrated score</span><strong id="summaryIntegratedScore">0 / 100</strong></div>
+              <div class="info-block"><span>Dominant emotional state</span><strong id="summaryEmotion">No Face</strong></div>
+              <div class="info-block"><span>Sensor evidence</span><strong id="summarySensors">0 of 4 sensors active</strong></div>
+              <div class="info-block"><span>Visual fatigue cue</span><strong id="summaryFatigue">0%</strong></div>
+              <div class="info-block"><span>Eyebag indicator</span><strong id="summaryEyebag">0%</strong></div>
+              <div class="info-block"><span>Wrinkle texture</span><strong id="summaryWrinkle">0%</strong></div>
+            </div>
+          </div>
+
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>Interpretation Guide</h3>
+            </div>
+            <div class="bullet-card">
+              <h4>OKAY</h4>
+              <p>Current evidence does not suggest significant concern. Continue routine monitoring and maintain baseline conditions.</p>
+            </div>
+            <div class="bullet-card">
+              <h4>MONITOR</h4>
+              <p>Signals are shifting upward. Review the live data, verify sensor quality, and observe whether elevated stress or fatigue persists.</p>
+            </div>
+            <div class="bullet-card">
+              <h4>NOT OKAY</h4>
+              <p>Persistent high-risk indicators are present across the camera and/or biometric evidence. Escalate to human review and proper referral.</p>
+            </div>
+            <p class="subtext top-gap">This screen is a screening summary. Final interpretation must still involve a qualified human reviewer.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="page-section" id="infoPage">
+        <div class="grid-2">
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>Fusion, Models, and Dataset Notes</h3>
+            </div>
+
+            <div class="bullet-card">
+              <h4>Sensor reference used in this package</h4>
+              <p>The uploaded stress-detection paper highlights multimodal stress evidence such as electrodermal activity, motion, and temperature. This dashboard keeps the live operator view cleaner by focusing the visible sensor status on the core four channels: heart rate, GSR, temperature, and motion.</p>
+            </div>
+
+            <div class="bullet-card">
+              <h4>Why weighted fusion matters</h4>
+              <p>The same paper reports better stress performance from weighted score-level fusion than feature-level fusion, so this dashboard keeps face evidence and each sensor stream separable before combining them into one live risk score. That makes later backend training cleaner and more adaptable per participant.</p>
+            </div>
+
+            <div class="bullet-card">
+              <h4>Recommended facial-expression datasets</h4>
+              <p>Use AffectNet and RAF-DB for in-the-wild robustness, FER+ for noisy web-style faces, and CK+ for controlled sequence benchmarking. Keep WESAD as the multimodal stress-side reference, not as a facial-expression dataset.</p>
+            </div>
+          </div>
+
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>Practical build guidance</h3>
+            </div>
+
+            <div class="bullet-card">
+              <h4>Browser-ready face stack</h4>
+              <p>The app can use face-api.js now, with strong mode preferring SSD Mobilenet when available. Captured session data and participant indexing are synchronized to the backend database instead of living only in the browser.</p>
+            </div>
+
+            <div class="bullet-card">
+              <h4>Transport options</h4>
+              <p>USB Serial fits Arduino-class boards, Bluetooth LE fits ESP32 BLE bridges and wearable-style peripherals, and WebSocket fits ESP32 Wi-Fi or Node relay bridges. All three paths map into one JSON packet parser.</p>
+            </div>
+
+            <div class="bullet-card">
+              <h4>Privacy boundary</h4>
+              <p>This build stores sessions, reports, settings, and participant indexing in a local SQLite database, while using browser cache for resilience. It still needs user consent, device control, and clear disclosure because local deployment is not a substitute for clinical governance.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page-section" id="inputsPage">
+        <div class="card panel">
+          <div class="card-title-row">
+            <h3>Captured Data Inputs</h3>
+            <span class="status-badge muted" id="recordCountBadge">0 Records</span>
+          </div>
+          <p class="subtext">Each row below represents a captured evidence snapshot. Click any row to view the full details and decide whether the participant is okay or not okay at that moment.</p>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Emotion</th>
+                  <th>Conf.</th>
+                  <th>HR</th>
+                  <th>GSR</th>
+                  <th>Temp</th>
+                  <th>Motion</th>
+                  <th>Eyebag</th>
+                  <th>Wrinkle</th>
+                  <th>Fatigue</th>
+                  <th>Decision</th>
+                </tr>
+              </thead>
+              <tbody id="inputTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="page-section" id="reportsPage">
+        <div class="card panel">
+          <div class="card-title-row">
+            <h3>Reports</h3>
+            <span class="status-badge muted" id="reportCountBadge">0 Records</span>
+          </div>
+
+          <div class="button-row">
+            <button class="action-btn" id="exportCsvBtn"><i data-lucide="download"></i>Export CSV</button>
+            <button class="action-btn secondary" id="clearReportsBtn"><i data-lucide="trash-2"></i>Clear Records</button>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Emotion</th>
+                  <th>Integrated</th>
+                  <th>Decision</th>
+                  <th>Participant</th>
+                </tr>
+              </thead>
+              <tbody id="reportTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="page-section" id="settingsPage">
+        <div class="grid-2">
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>Appearance & Theme</h3>
+            </div>
+
+            <div class="settings-list">
+              <label class="setting-row">
+                <span>Theme</span>
+                <select id="themeSelect">
+                  <option value="royal-violet">Royal Violet</option>
+                  <option value="orchid-glow">Orchid Glow</option>
+                  <option value="midnight-iris">Midnight Iris</option>
+                  <option value="lavender-frost">Lavender Frost</option>
+                  <option value="emerald-aurora">Emerald Aurora</option>
+                  <option value="sunset-flare">Sunset Flare</option>
+                  <option value="cobalt-pulse">Cobalt Pulse</option>
+                  <option value="rose-nebula">Rose Nebula</option>
+                  <option value="amber-cosmos">Amber Cosmos</option>
+                </select>
+              </label>
+
+              <label class="setting-row">
+                <span>Appearance mode</span>
+                <select id="appearanceSelect">
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                  <option value="auto">Automatic</option>
+                </select>
+              </label>
+
+              <label class="setting-row">
+                <span>Camera source</span>
+                <select id="cameraDeviceSelect">
+                  <option value="auto">Auto / Default camera</option>
+                </select>
+              </label>
+
+              <label class="setting-row">
+                <span>Camera facing mode</span>
+                <select id="cameraFacingSelect">
+                  <option value="auto">Auto</option>
+                  <option value="user">Front / Selfie</option>
+                  <option value="environment">Rear / Environment</option>
+                </select>
+              </label>
+
+              <div class="switch-row">
+                <label class="switch-pill"><input type="checkbox" id="mirrorCameraToggle" checked /><span>Mirror camera preview</span></label>
+                <label class="switch-pill"><input type="checkbox" id="showLandmarksToggle" checked /><span>Show landmarks</span></label>
+              </div>
+            </div>
+          </div>
+
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>Detection & Capture</h3>
+            </div>
+
+            <div class="settings-list">
+              <label class="setting-row">
+                <span>Detection interval</span>
+                <select id="detectionIntervalSelect">
+                  <option value="120">Fast · 120 ms</option>
+                  <option value="160" selected>Balanced · 160 ms</option>
+                  <option value="220">Stable · 220 ms</option>
+                </select>
+              </label>
+
+              <label class="setting-row">
+                <span>Detector input size</span>
+                <select id="detectorSizeSelect">
+                  <option value="320">320</option>
+                  <option value="416">416</option>
+                  <option value="512" selected>512</option>
+                </select>
+              </label>
+
+              <label class="setting-row">
+                <span>Detection profile</span>
+                <select id="detectionProfileSelect">
+                  <option value="standard">Standard</option>
+                  <option value="strong">Strong</option>
+                  <option value="phone-strong" selected>Phone / External Cam Strong</option>
+                </select>
+              </label>
+
+              <label class="setting-row">
+                <span>Model source</span>
+                <select id="modelSourceSelect">
+                  <option value="remote" selected>Remote demo weights</option>
+                  <option value="local">Local ./models folder</option>
+                </select>
+              </label>
+
+              <label class="setting-row">
+                <span>Smoothing factor</span>
+                <select id="smoothingSelect">
+                  <option value="0.25">Low smoothing</option>
+                  <option value="0.40" selected>Balanced smoothing</option>
+                  <option value="0.60">Strong smoothing</option>
+                </select>
+              </label>
+
+              <div class="switch-row">
+                <label class="switch-pill"><input type="checkbox" id="autoCaptureToggle" checked /><span>Auto-capture records</span></label>
+                <label class="switch-pill"><input type="checkbox" id="demoSensorsToggle" /><span>Enable demo sensors</span></label>
+              </div>
+
+              <div class="button-row">
+                <button class="action-btn" id="saveSettingsBtn"><i data-lucide="save"></i>Save Settings</button>
+                <button class="action-btn secondary" id="resetSettingsBtn"><i data-lucide="rotate-ccw"></i>Reset</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card panel">
+          <div class="card-title-row">
+            <h3>System Information</h3>
+          </div>
+          <div class="info-stack compact">
+            <div class="info-block"><span>Models</span><strong id="modelStatusText">Not loaded</strong></div>
+            <div class="info-block"><span>Camera</span><strong id="cameraStatusText">Inactive</strong></div>
+            <div class="info-block"><span>Serial</span><strong id="serialStatusText">Disconnected</strong></div>
+            <div class="info-block"><span>Bluetooth LE</span><strong id="bleStatusText">Disconnected</strong></div>
+            <div class="info-block"><span>Wi-Fi Socket</span><strong id="wsStatusText">Disconnected</strong></div>
+            <div class="info-block"><span>Storage</span><strong id="storageStatusText">Backend not synced</strong></div>
+            <div class="info-block"><span>Current mode</span><strong id="modeValueText">Real-Time</strong></div>
+            <div class="info-block"><span>Logged-in user</span><strong id="loggedInUserText">Guest</strong></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="recordModal">
+    <div class="modal-card panel">
+      <div class="card-title-row">
+        <h3>Record Details</h3>
+        <button class="icon-btn" id="closeRecordModalBtn" title="Close"><i data-lucide="x"></i></button>
+      </div>
+      <div class="record-detail-grid" id="recordDetailGrid"></div>
+    </div>
+  </div>
+</body>
+</html>

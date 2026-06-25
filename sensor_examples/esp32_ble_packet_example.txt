@@ -1,0 +1,1 @@
+Notify UTF-8 text packets on your BLE characteristic, one JSON object per line.

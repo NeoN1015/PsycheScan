@@ -1,0 +1,15 @@
+BACKEND NOTES
+
+- Runtime: Python standard library only
+- Database: SQLite (sqlite3)
+- HTTP server: ThreadingHTTPServer + SimpleHTTPRequestHandler
+- API endpoints:
+  GET  /api/health
+  GET  /api/bootstrap
+  POST /api/sync
+
+SYNC MODEL
+- Frontend loads from browser cache first for fast startup.
+- Frontend then requests /api/bootstrap.
+- If the database already has data, backend data replaces the cache.
+- If the database is empty but browser cache has data, the frontend seeds the database automatically.
