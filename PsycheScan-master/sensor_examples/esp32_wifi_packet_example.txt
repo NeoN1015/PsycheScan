@@ -1,0 +1,3 @@
+Send newline JSON packets over WebSocket, e.g. {"hr":78,"gsr":1.05,"temp":34.2,"motion":0.04,"max30102":true,"gsrConnected":true,"ds18b20":true,"mpu6050":true}
+
+Legacy HW827 flag is still accepted for backward compatibility.

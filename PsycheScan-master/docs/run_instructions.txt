@@ -1,0 +1,28 @@
+RUN GUIDE — PSYCHESCAN (CpE28 / COEN3133)
+
+1. Open the inner project folder (the one containing server.py and index.html).
+2. Keep the face-api model files in a folder named "models" beside index.html for local model loading.
+3. Start the app with one of these:
+   - Windows: double-click start_server.bat
+   - Terminal: python server.py
+4. Open http://127.0.0.1:8000 in Chrome or Edge.
+5. Default operator password: CPE28
+
+PROJECT CONFIGURATION
+- All manuscript-based constants live in project_config.js (password, sensors, biomarker thresholds, branding).
+- Edit project_config.js instead of scattering values across main.js and index.html.
+
+WHAT IS STORED IN THE BACKEND
+- settings
+- remembered login session
+- participant counter
+- captured records
+- reports
+
+DATABASE FILE
+- data/dashboard.sqlite3
+
+IMPORTANT
+- Screening and decision-support tool only — not a clinical diagnosis substitute.
+- The browser keeps a local cache so the UI can recover if the backend is temporarily unavailable.
+- The backend is the main persistence layer in this package.
