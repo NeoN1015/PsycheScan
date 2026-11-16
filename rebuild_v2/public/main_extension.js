@@ -1,0 +1,1559 @@
+Object.assign(STORAGE_KEYS, {
+    records: "cnn_lstm_records_v3",
+    reports: "cnn_lstm_reports_v3",
+    profiles: "psychescan_profiles_v1",
+    activeProfileId: "psychescan_active_profile_v1"
+});
+
+Object.assign(state.settings, {
+    detectionProfile: "phone-strong",
+    modelSource: "remote",
+    cameraDeviceId: "auto",
+    cameraFacing: "auto",
+    wsUrl: PROJECT_CONFIG.hardware.wsUrl,
+    bleServiceUuid: PROJECT_CONFIG.hardware.bleServiceUuid,
+    bleCharacteristicUuid: PROJECT_CONFIG.hardware.bleCharacteristicUuid
+});
+
+Object.assign(state, {
+    bleConnected: false,
+    bleConnecting: false,
+    bleDevice: null,
+    bleServer: null,
+    bleCharacteristic: null,
+    bleNotificationHandler: null,
+    bleDisconnectHandler: null,
+    wsConnected: false,
+    ws: null,
+    wsReconnectTimer: null,
+    wsReconnectAttempt: 0,
+    wsManualDisconnect: false,
+    bleBuffer: "",
+    serialConnecting: false,
+    serialReadPromise: null,
+    serialDisconnectHandler: null,
+    profiles: [],
+    activeProfileId: null,
+    activeProfileTabId: null,
+    modelDetector: "tiny",
+    appearanceWatcherBound: false
+});
+
+function anyTransportConnected() {
+    return !!(state.serialConnected || state.bleConnected || state.wsConnected);
+}
+
+function clearSensorReadings() {
+    state.sensorValues = { hr: null, gsr: null, temp: null, tempDrop: null, motion: null };
+    state.sensorContact = { hr: false, gsr: false, temp: false, motion: false };
+    Object.values(state.sensors).forEach(sensor => {
+        sensor.connected = false;
+        sensor.lastSeen = 0;
+        sensor.state = state.settings.demoSensors ? "demo" : "disconnected";
+    });
+}
+
+function persistCollections() {
+    saveLocalJSON(STORAGE_KEYS.records, state.records);
+    saveLocalJSON(STORAGE_KEYS.reports, state.reports);
+    saveLocalJSON(STORAGE_KEYS.profiles, state.profiles);
+    saveLocalJSON(STORAGE_KEYS.activeProfileId, state.activeProfileId);
+    if (window.PsycheScanBackend) window.PsycheScanBackend.sync("collections");
+}
+
+function loadCollections() {
+    try {
+        state.records = loadLocalJSON(STORAGE_KEYS.records, []);
+        state.reports = loadLocalJSON(STORAGE_KEYS.reports, []);
+        state.profiles = loadLocalJSON(STORAGE_KEYS.profiles, []);
+        state.activeProfileId = loadLocalJSON(STORAGE_KEYS.activeProfileId, null);
+        const session = localStorage.getItem("cnn_lstm_session_v1");
+        if (session) {
+            const parsedSession = JSON.parse(session);
+            state.session = { ...state.session, ...parsedSession };
+            state.session.baselineTimer = null;
+            if (state.session.baselineCaptureActive) {
+                state.session.baselineCaptureActive = false;
+                state.session.baselineCompletedAt = Date.now();
+                state.session.baselineError = "Previous baseline capture was interrupted. Start a new capture to record a normal baseline.";
+                if (typeof persistBaselineSession === "function") persistBaselineSession();
+            }
+            if (Array.isArray(parsedSession.history)) state.history = parsedSession.history;
+        }
+        migrateLegacyProfiles();
+    } catch (e) {
+        console.warn("Failed to load local collections", e);
+    }
+}
+
+function createProfileId() {
+    const uuid = window.crypto?.randomUUID?.();
+    return uuid || `profile-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function migrateLegacyProfiles() {
+    if (!Array.isArray(state.profiles)) state.profiles = [];
+    if (!Array.isArray(state.records)) state.records = [];
+    if (!Array.isArray(state.reports)) state.reports = [];
+    const byName = new Map(state.profiles.map(profile => [String(profile.name).trim().toLowerCase(), profile]));
+    const findOrCreateLegacy = name => {
+        const key = String(name || "").trim().toLowerCase();
+        if (!key) return null;
+        if (byName.has(key)) return byName.get(key);
+        const profile = {
+            profileId: `legacy-${key.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "patient"}`,
+            name: String(name).trim(),
+            createdAt: new Date().toISOString(),
+            baseline: null
+        };
+        byName.set(key, profile);
+        state.profiles.push(profile);
+        return profile;
+    };
+
+    [...state.records, ...state.reports].forEach(item => {
+        if (!item.profileId && item.participantId) {
+            const profile = findOrCreateLegacy(item.participantId);
+            if (profile) {
+                item.profileId = profile.profileId;
+                item.profileName = profile.name;
+            }
+        }
+    });
+    const legacyName = String(state.session.profileName || state.settings.participantId || "").trim();
+    const legacyBaseline = state.session.baselineSummary;
+    if (legacyName && legacyBaseline) {
+        const profile = findOrCreateLegacy(legacyName);
+        if (profile && !profile.baseline) {
+            profile.baseline = {
+                hr: legacyBaseline.hr ?? null,
+                gsr: legacyBaseline.gsr ?? null,
+                temp: legacyBaseline.temp ?? null,
+                motion: legacyBaseline.motion ?? null,
+                sampleCount: legacyBaseline.samples ?? 0,
+                durationSec: legacyBaseline.durationSec ?? 0,
+                completedAt: legacyBaseline.completedAt ?? null
+            };
+        }
+    }
+    if (!Array.isArray(state.history)) state.history = [];
+    state.history.forEach(sample => {
+        if (!sample || sample.profileId) return;
+        const name = String(sample.profileName || sample.participantId || legacyName).trim();
+        const profile = findOrCreateLegacy(name);
+        if (profile) sample.profileId = profile.profileId;
+    });
+    if (!state.session.profileId && legacyName) {
+        const profile = findOrCreateLegacy(legacyName);
+        if (profile) {
+            state.session.profileId = profile.profileId;
+            state.session.profileName = profile.name;
+        }
+    }
+    if (!state.profiles.some(profile => profile.profileId === state.activeProfileId)) {
+        state.activeProfileId = null;
+    }
+}
+
+function completeBaselineProfile(summary) {
+    const profileId = state.session.profileId;
+    if (!profileId) return;
+    let profile = state.profiles.find(item => item.profileId === profileId);
+    if (!profile) {
+        profile = {
+            profileId,
+            name: state.session.profileName,
+            createdAt: new Date().toISOString(),
+            baseline: null
+        };
+        state.profiles.unshift(profile);
+    }
+    profile.name = String(state.session.profileName || profile.name).trim();
+    profile.baseline = {
+        hr: summary.hr,
+        gsr: summary.gsr,
+        temp: summary.temp,
+        motion: summary.motion,
+        sampleCount: summary.samples,
+        durationSec: summary.durationSec,
+        completedAt: summary.completedAt
+    };
+    state.activeProfileId = profile.profileId;
+    state.activeProfileTabId = profile.profileId;
+    persistCollections();
+    renderProfiles();
+    renderAll();
+    switchPage("profiles");
+}
+
+function setActiveProfile(profileId) {
+    const profile = state.profiles.find(item => item.profileId === profileId);
+    if (!profile) return;
+    const changed = state.activeProfileId !== profileId;
+    state.activeProfileId = profileId;
+    state.activeProfileTabId = profileId;
+    state.session.profileId = profileId;
+    state.session.profileName = profile.name;
+    state.session.baselineSummary = profile.baseline
+        ? { ...profile.baseline, samples: profile.baseline.sampleCount }
+        : null;
+    if (changed) {
+        const now = Date.now();
+        state.session.id = `session-${now}`;
+        state.session.startedAt = now;
+        state.session.firstReadingAt = now + Number(state.settings.firstReadingDelaySec || 0) * 1000;
+        state.session.phase = "questionnaire";
+        state.session.baselineError = "";
+        clearSensorReadings();
+        resetFaceState();
+        state.lastPacketTimestamp = 0;
+        state.lastPacketRaw = "—";
+        if ($("lastPacketTime")) $("lastPacketTime").textContent = "—";
+        if ($("lastPacketRaw")) $("lastPacketRaw").textContent = "—";
+    }
+    saveLocalJSON(STORAGE_KEYS.activeProfileId, profileId);
+    if (window.PsycheScanBackend) window.PsycheScanBackend.sync("active-profile");
+    renderProfiles();
+    renderAll();
+    updateCharts();
+    renderBaselineWorkflow();
+}
+
+function renderProfiles() {
+    const select = $("activeProfileSelect");
+    if (select) {
+        const current = state.activeProfileId || "";
+        select.replaceChildren(new Option("Select a patient", ""));
+        state.profiles.forEach(profile => {
+            const option = new Option(profile.name, profile.profileId);
+            select.add(option);
+        });
+        select.value = current;
+    }
+    const deleteButton = $("deletePatientBtn");
+    const hasActiveProfile = state.profiles.some(profile => profile.profileId === state.activeProfileId);
+    if (deleteButton) deleteButton.disabled = !hasActiveProfile;
+    if ($("updatePatientBtn")) $("updatePatientBtn").disabled = !hasActiveProfile;
+    if ($("viewPatientBtn")) $("viewPatientBtn").disabled = !hasActiveProfile;
+    const badge = $("activeProfileBadge");
+    const activeProfile = state.profiles.find(profile => profile.profileId === state.activeProfileId);
+    if (badge) badge.textContent = activeProfile ? `ACTIVE: ${activeProfile.name}` : "NO ACTIVE PROFILE";
+
+    const tabs = $("profileTabs");
+    if (!tabs) return;
+    tabs.replaceChildren();
+    state.profiles.forEach(profile => {
+        const tab = document.createElement("button");
+        tab.type = "button";
+        tab.className = `profile-tab${profile.profileId === (state.activeProfileTabId || state.activeProfileId) ? " active" : ""}`;
+        tab.setAttribute("role", "tab");
+        tab.setAttribute("aria-selected", String(profile.profileId === (state.activeProfileTabId || state.activeProfileId)));
+        tab.textContent = profile.name;
+        tab.addEventListener("click", () => {
+            state.activeProfileTabId = profile.profileId;
+            setActiveProfile(profile.profileId);
+            switchPage("profiles");
+        });
+        tabs.appendChild(tab);
+    });
+
+    const detail = $("profileDetail");
+    if (!detail) return;
+    const profile = state.profiles.find(item => item.profileId === (state.activeProfileTabId || state.activeProfileId));
+    if (!profile) {
+        detail.innerHTML = '<p class="subtext">Add a patient from the Dashboard to create a profile.</p>';
+        return;
+    }
+    const baseline = profile.baseline;
+    const baselineItems = [
+        ["Heart rate", baseline?.hr, "bpm", 1],
+        ["GSR / EDA", baseline?.gsr, "µS", 2],
+        ["Temperature", baseline?.temp, "°C", 1],
+        ["Motion", baseline?.motion, "g", 3],
+        ["Sample count", baseline?.sampleCount, "", 0],
+        ["Duration", baseline?.durationSec, " sec", 0]
+    ];
+    const recordIndices = state.records
+        .map((record, index) => ({ record, index }))
+        .filter(item => item.record.profileId === profile.profileId);
+    const reports = state.reports.filter(report => report.profileId === profile.profileId);
+    detail.innerHTML = `
+      <div class="card-title-row"><h3>${escapeHtml(profile.name)}</h3><span class="subtext">Created ${escapeHtml(new Date(profile.createdAt).toLocaleString())}</span></div>
+      <h4 class="top-gap">Baseline</h4>
+      <div class="profile-summary-grid">${baselineItems.map(([label, value, unit, decimals]) => `
+        <div class="info-block"><span>${escapeHtml(label)}</span><strong>${Number.isFinite(value) ? `${Number(value).toFixed(decimals)}${unit}` : "--"}</strong></div>
+      `).join("")}</div>
+      <p class="subtext">Baseline captured ${baseline?.completedAt ? escapeHtml(new Date(baseline.completedAt).toLocaleString()) : "not recorded"}.</p>
+      <div class="profile-records"><h4>Patient records (${recordIndices.length})</h4>
+        <div class="table-wrap"><table><thead><tr><th>Timestamp</th><th>Emotion</th><th>HR</th><th>GSR</th><th>Temp</th><th>Motion</th><th>Decision</th></tr></thead>
+        <tbody>${recordIndices.map(({ record, index }) => `<tr data-record-index="${index}">
+          <td>${escapeHtml(record.timestamp)}</td><td>${escapeHtml(record.emotion)}</td>
+          <td>${escapeHtml(record.hr ?? "--")}</td><td>${escapeHtml(record.gsr ?? "--")}</td>
+          <td>${escapeHtml(record.temp ?? "--")}</td><td>${escapeHtml(record.motion ?? "--")}</td>
+          <td>${escapeHtml(record.decision)}</td></tr>`).join("")}</tbody></table></div>
+      </div>
+      <div class="profile-records"><h4>Patient reports (${reports.length})</h4>
+        <div class="table-wrap"><table><thead><tr><th>Timestamp</th><th>Emotion</th><th>Score</th><th>Decision</th></tr></thead>
+        <tbody>${reports.map(report => `<tr><td>${escapeHtml(report.timestamp)}</td><td>${escapeHtml(report.emotion)}</td>
+          <td>${escapeHtml(report.integratedScore)}</td><td>${escapeHtml(report.decision)}</td></tr>`).join("")}</tbody></table></div>
+      </div>`;
+    detail.querySelectorAll("tr[data-record-index]").forEach(row => {
+        row.addEventListener("click", () => openRecordModal(Number(row.dataset.recordIndex)));
+    });
+}
+
+async function addPatientProfile() {
+    if (state.session.baselineCaptureActive) {
+        alert("Cancel the current baseline capture before adding another patient.");
+        return;
+    }
+    const input = $("profileNameInput");
+    const name = input?.value.trim() || "";
+    if (!name) {
+        alert("Enter a patient name or code first.");
+        input?.focus();
+        return;
+    }
+    const existing = state.profiles.find(profile => profile.name.trim().toLowerCase() === name.toLowerCase());
+    if (existing) {
+        alert("A patient with that name or code already exists. The existing profile is now selected.");
+        input.value = "";
+        setActiveProfile(existing.profileId);
+        return;
+    }
+    const profile = {
+        profileId: createProfileId(),
+        name,
+        createdAt: new Date().toISOString(),
+        baseline: null
+    };
+    const button = $("addPatientBtn");
+    if (button) button.disabled = true;
+    try {
+        if (!window.PsycheScanBackend?.createProfile) {
+            throw new Error("Patient creation is unavailable until the authenticated server is ready.");
+        }
+        await window.PsycheScanBackend.createProfile(profile);
+        state.profiles.unshift(profile);
+        state.activeProfileTabId = profile.profileId;
+        input.value = "";
+        setActiveProfile(profile.profileId);
+        switchPage("dashboard");
+        closePatientManagementModal();
+    } catch (error) {
+        console.error("Could not create patient profile", error);
+        alert(`Could not add this patient: ${error.message}`);
+    } finally {
+        if (button) button.disabled = false;
+    }
+}
+
+function viewActivePatient() {
+    if (!state.profiles.some(profile => profile.profileId === state.activeProfileId)) {
+        alert("Select a patient to view.");
+        return;
+    }
+    closePatientManagementModal();
+    state.activeProfileTabId = state.activeProfileId;
+    renderProfiles();
+    switchPage("profiles");
+}
+
+async function updateActivePatient() {
+    const profile = state.profiles.find(item => item.profileId === state.activeProfileId);
+    if (!profile) {
+        alert("Select a patient to update.");
+        return;
+    }
+    if (state.session.baselineCaptureActive) {
+        alert("Cancel the current baseline capture before updating a patient.");
+        return;
+    }
+    const input = $("profileNameInput");
+    const name = input?.value.trim() || "";
+    if (!name) {
+        alert("Enter the replacement patient name or code first.");
+        input?.focus();
+        return;
+    }
+    const duplicate = state.profiles.find(item =>
+        item.profileId !== profile.profileId &&
+        item.name.trim().toLowerCase() === name.toLowerCase()
+    );
+    if (duplicate) {
+        alert("A different patient already uses that name or code.");
+        return;
+    }
+    if (name === profile.name) {
+        alert("The patient name or code is unchanged.");
+        return;
+    }
+    const previousName = profile.name;
+
+    const button = $("updatePatientBtn");
+    if (button) button.disabled = true;
+    try {
+        if (!window.PsycheScanBackend?.updateProfile) {
+            throw new Error("Patient updates are unavailable until the authenticated server is ready.");
+        }
+        await window.PsycheScanBackend.updateProfile(profile.profileId, name);
+        profile.name = name;
+        state.records.forEach(record => {
+            if (record.profileId === profile.profileId) record.profileName = name;
+        });
+        state.reports.forEach(report => {
+            if (report.profileId === profile.profileId) report.profileName = name;
+        });
+        state.history.forEach(sample => {
+            if (sample.profileId === profile.profileId) sample.profileName = name;
+        });
+        if (state.session.profileId === profile.profileId) state.session.profileName = name;
+        if (state.settings.participantId === previousName) state.settings.participantId = name;
+        if (input) input.value = "";
+        persistCollections();
+        persistBaselineSession();
+        renderProfiles();
+        renderAll();
+        updateCharts();
+        alert(`${name} was updated.`);
+    } catch (error) {
+        console.error("Could not update patient profile", error);
+        alert(`Could not update this patient: ${error.message}`);
+    } finally {
+        if (button) button.disabled = !state.activeProfileId;
+    }
+}
+
+async function deleteActivePatient() {
+    const profile = state.profiles.find(item => item.profileId === state.activeProfileId);
+    if (!profile) {
+        alert("Select a patient to delete.");
+        return;
+    }
+    const confirmed = confirm(
+        `Permanently delete ${profile.name} and this patient's baseline, records, reports, history, and telemetry? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    const button = $("deletePatientBtn");
+    if (button) button.disabled = true;
+    try {
+        if (!window.PsycheScanBackend?.deleteProfile) {
+            throw new Error("Patient deletion is unavailable until the authenticated server is ready.");
+        }
+        await window.PsycheScanBackend.deleteProfile(profile.profileId);
+
+        const deletedProfileId = profile.profileId;
+        state.profiles = state.profiles.filter(item => item.profileId !== deletedProfileId);
+        state.records = state.records.filter(item => item.profileId !== deletedProfileId);
+        state.reports = state.reports.filter(item => item.profileId !== deletedProfileId);
+        state.history = state.history.filter(item => item.profileId !== deletedProfileId);
+        if (state.session.baselineTimer) clearTimeout(state.session.baselineTimer);
+        state.session.baselineTimer = null;
+        state.session.baselineCaptureActive = false;
+        state.session.baselineEndsAt = 0;
+        state.session.baselineError = "";
+        state.session.baselineSummary = null;
+        state.session.baselineCompletedAt = 0;
+        state.session.profileId = null;
+        state.session.profileName = "";
+        state.session.id = null;
+        state.session.startedAt = 0;
+        state.session.firstReadingAt = 0;
+        state.session.phase = "baseline";
+        state.session.lstmPrediction = null;
+        state.activeProfileId = null;
+        state.activeProfileTabId = null;
+        if (state.settings.participantId === profile.name) delete state.settings.participantId;
+        if ($("profileNameInput")) $("profileNameInput").value = "";
+        clearSensorReadings();
+        resetFaceState();
+        persistCollections();
+        persistBaselineSession();
+        renderProfiles();
+        renderAll();
+        updateCharts();
+        renderBaselineWorkflow();
+        alert(`${profile.name} and its linked data were deleted.`);
+    } catch (error) {
+        console.error("Could not delete patient profile", error);
+        alert(`Could not delete this patient: ${error.message}`);
+    } finally {
+        if (button) button.disabled = !state.activeProfileId;
+    }
+}
+
+function clearLiveReadings() {
+    const confirmed = confirm(
+        "Clear the current sensor and face readings and the selected patient's visible trend history? A running baseline will be canceled. Saved baselines, records, and reports will remain; new live readings will appear as they arrive."
+    );
+    if (!confirmed) return;
+
+    if (state.session.baselineTimer) clearTimeout(state.session.baselineTimer);
+    if (state.session.baselineCaptureActive) {
+        state.session.baselineCaptureActive = false;
+        state.session.baselineCompletedAt = Date.now();
+        state.session.baselineError = "Baseline capture canceled because live readings were cleared.";
+    }
+    state.session.baselineTimer = null;
+    state.session.baselineEndsAt = 0;
+    state.session.lstmPrediction = null;
+    state.history = state.activeProfileId
+        ? state.history.filter(item => item.profileId !== state.activeProfileId)
+        : [];
+    state.lastHistorySampleAt = 0;
+    state.lastPacketTimestamp = 0;
+    state.lastPacketRaw = "—";
+    clearSensorReadings();
+    resetFaceState();
+    if ($("lastPacketTime")) $("lastPacketTime").textContent = "—";
+    if ($("lastPacketRaw")) $("lastPacketRaw").textContent = "—";
+    if ($("lstmStatusText")) $("lstmStatusText").textContent = "Waiting for sequence";
+    renderAll();
+    updateCharts();
+    renderBaselineWorkflow();
+    persistBaselineSession();
+}
+
+function formatSensorValue(key) {
+    const value = state.sensorValues[key];
+    if (value === null || value === undefined || Number.isNaN(value)) return "--";
+    if (key === "hr") return `${Math.round(value)}`;           // Heart rate: whole number
+    if (key === "motion") return `${Number(value).toFixed(3)}`; // Motion: 3 decimal places
+    if (key === "temp") return `${Number(value).toFixed(1)}`;   // Temperature: 1 decimal
+    return `${Number(value).toFixed(2)}`;                       // GSR: 2 decimals
+}
+
+function updateSensorPresence() {
+    const now = Date.now();
+    const online = anyTransportConnected();
+    Object.entries(state.sensors).forEach(([sensorId, sensor]) => {
+        if (sensor.lastSeen && now - sensor.lastSeen <= PROJECT_CONFIG.runtime.sensorFreshnessMs) {
+            if (sensor.state !== "demo") sensor.state = "connected";
+            sensor.connected = true;
+            return;
+        }
+        const valueKey = PROJECT_CONFIG.sensors[sensorId].key;
+        state.sensorValues[valueKey] = null;
+        state.sensorContact[valueKey] = false;
+        if (sensorId === "ds18b20") state.sensorValues.tempDrop = null;
+        if (state.settings.demoSensors && !online) {
+            sensor.connected = true;
+            sensor.state = "demo";
+            return;
+        }
+        if (online) {
+            sensor.connected = false;
+            sensor.state = "searching";
+            return;
+        }
+        sensor.connected = false;
+        sensor.state = "disconnected";
+    });
+}
+
+function getResolvedAppearance() {
+    if (state.settings.appearance === "auto" && window.matchMedia) {
+        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    return state.settings.appearance || "light";
+}
+
+function bindAppearanceWatcher() {
+    if (state.appearanceWatcherBound || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => {
+        if (state.settings.appearance === "auto") {
+            applyThemeSettings();
+            if (typeof buildCharts === "function") buildCharts();
+        }
+    };
+    if (mq.addEventListener) mq.addEventListener("change", onChange);
+    else if (mq.addListener) mq.addListener(onChange);
+    state.appearanceWatcherBound = true;
+}
+
+function applyThemeSettings() {
+    bindAppearanceWatcher();
+    document.body.dataset.theme = state.settings.theme;
+    document.body.dataset.appearance = getResolvedAppearance();
+    const pairs = [
+        ["themeSelect", state.settings.theme],
+        ["appearanceSelect", state.settings.appearance || "light"],
+        ["detectionIntervalSelect", String(state.settings.detectionInterval)],
+        ["detectorSizeSelect", String(state.settings.detectorInputSize)],
+        ["smoothingSelect", String(state.settings.smoothingFactor)],
+        ["detectionProfileSelect", state.settings.detectionProfile || "phone-strong"],
+        ["modelSourceSelect", state.settings.modelSource || "remote"],
+        ["cameraFacingSelect", state.settings.cameraFacing || "auto"],
+        ["settingsObservationDurationSelect", String(state.settings.observationDurationSec || 180)],
+        ["settingsFirstReadingDelaySelect", String(state.settings.firstReadingDelaySec || 0)],
+        ["settingsCustomObservationMinutes", String(Math.round((Number(state.settings.customDurationSec) || 180) / 60))],
+        ["dashboardDetectionInterval", String(state.settings.detectionInterval || 160)],
+        ["dashboardDetectorSize", String(state.settings.detectorInputSize || 512)],
+        ["dashboardDetectionProfile", state.settings.detectionProfile || "phone-strong"],
+        ["dashboardSmoothing", String(state.settings.smoothingFactor || 0.4)],
+        ["dashboardObservationDuration", String(state.settings.observationDurationSec || 180)],
+        ["dashboardFirstReadingDelay", String(state.settings.firstReadingDelaySec || 0)],
+        ["dashboardConnectionMode", state.settings.connectionMode || "serial"],
+        ["connectionModeSelect", state.settings.connectionMode || "serial"],
+        ["samplingIntervalSelect", String(state.settings.samplingIntervalMs || 1000)],
+        ["wsUrlInput", state.settings.wsUrl || PROJECT_CONFIG.hardware.wsUrl],
+        ["bleServiceUuidInput", (state.settings.bleServiceUuid || PROJECT_CONFIG.hardware.bleServiceUuid).toLowerCase()],
+        ["bleCharacteristicUuidInput", (state.settings.bleCharacteristicUuid || PROJECT_CONFIG.hardware.bleCharacteristicUuid).toLowerCase()]
+    ];
+    pairs.forEach(([id, val]) => {
+        $(id) && ($(id).value = val);
+    });
+    if ($("mirrorCameraToggle")) $("mirrorCameraToggle").checked = !!state.settings.mirrorCamera;
+    if ($("showLandmarksToggle")) $("showLandmarksToggle").checked = !!state.settings.showLandmarks;
+    if ($("autoCaptureToggle")) $("autoCaptureToggle").checked = !!state.settings.autoCapture;
+    if ($("demoSensorsToggle")) $("demoSensorsToggle").checked = !!state.settings.demoSensors;
+    if ($("dashboardAutoCapture")) $("dashboardAutoCapture").checked = !!state.settings.autoCapture;
+    if ($("dashboardDemoSensors")) $("dashboardDemoSensors").checked = !!state.settings.demoSensors;
+    document.querySelectorAll(".camera-video, .camera-overlay").forEach(el => el.classList.toggle("mirrored", !!state.settings.mirrorCamera));
+}
+
+function updateStatusPanel() {
+    if ($("modelStatusText")) $("modelStatusText").textContent = state.modelsLoaded ? `Loaded (${state.modelDetector.toUpperCase()})` : "Not loaded";
+    if ($("cameraStatusText")) $("cameraStatusText").textContent = state.cameraActive ? "Active" : "Inactive";
+    if ($("serialStatusText")) $("serialStatusText").textContent = state.serialConnected ? "Connected" : "Disconnected";
+    if ($("bleStatusText")) $("bleStatusText").textContent = state.bleConnected ? "Connected" : "Disconnected";
+    if ($("wsStatusText")) $("wsStatusText").textContent = state.wsConnected ? "Connected" : "Disconnected";
+    if ($("storageStatusText")) $("storageStatusText").textContent = `${state.records.length} records · ${state.reports.length} reports`;
+    if ($("loggedInUserText")) $("loggedInUserText").textContent = state.loggedInUser;
+    if ($("dashboardWindowBadge")) $("dashboardWindowBadge").textContent = `${Math.round(getObservationDurationSec() / 60)} MIN WINDOW`;
+}
+
+function renderLiveStatCards() {
+    const baseline = state.session.baselineSummary || {};
+    const hr = formatSeverityValue("hr", state.sensorValues.hr, baseline.hr);
+    const gsr = formatSeverityValue("gsr", state.sensorValues.gsr, baseline.gsr);
+    const temp = formatSeverityValue("temp", state.sensorValues.temp, baseline.temp);
+    const motion = formatSeverityValue("motion", state.sensorValues.motion, baseline.motion);
+
+    if ($("liveHr")) $("liveHr").innerHTML = state.sensorValues.hr !== null ? `${hr.text}${getSeverityBadgeMarkup(hr.label, "compact")}` : "--";
+    if ($("liveGsr")) $("liveGsr").innerHTML = state.sensorValues.gsr !== null ? `${gsr.text}${getSeverityBadgeMarkup(gsr.label, "compact")}` : "--";
+    if ($("liveTemp")) $("liveTemp").innerHTML = state.sensorValues.temp !== null ? `${temp.text}${getSeverityBadgeMarkup(temp.label, "compact")}` : "--";
+    if ($("liveMotion")) $("liveMotion").innerHTML = state.sensorValues.motion !== null ? `${motion.text}${getSeverityBadgeMarkup(motion.label, "compact")}` : "--";
+    if ($("eyebagScore")) $("eyebagScore").textContent = getSeverityLabelFromPercent(state.visualFatigue.eyebag);
+    if ($("wrinkleScore")) $("wrinkleScore").textContent = getSeverityLabelFromPercent(state.visualFatigue.wrinkle);
+    if ($("fatigueScore")) $("fatigueScore").textContent = getSeverityLabelFromPercent(state.visualFatigue.fatigue);
+    if ($("dashboardFatigueScore")) $("dashboardFatigueScore").textContent = getSeverityLabelFromPercent(state.visualFatigue.fatigue);
+    if ($("dashboardWrinkleScore")) $("dashboardWrinkleScore").textContent = getSeverityLabelFromPercent(state.visualFatigue.wrinkle);
+    if ($("dashboardEyebagScore")) $("dashboardEyebagScore").textContent = getSeverityLabelFromPercent(state.visualFatigue.eyebag);
+
+    if ($("dashboardHrValue")) $("dashboardHrValue").textContent = state.sensorValues.hr !== null ? `${formatSensorValue("hr")} bpm` : "--";
+    if ($("dashboardGsrValue")) $("dashboardGsrValue").textContent = state.sensorValues.gsr !== null ? `${formatSensorValue("gsr")} µS` : "--";
+    if ($("dashboardTempValue")) $("dashboardTempValue").textContent = state.sensorValues.temp !== null ? `${formatSensorValue("temp")} °C` : "--";
+    if ($("dashboardMotionValue")) $("dashboardMotionValue").textContent = state.sensorValues.motion !== null ? `${formatSensorValue("motion")} g` : "--";
+
+    [
+      ["dashboardHrSeverity", hr.label],
+      ["dashboardGsrSeverity", gsr.label],
+      ["dashboardTempSeverity", temp.label],
+      ["dashboardMotionSeverity", motion.label]
+    ].forEach(([id, label]) => {
+      const el = $(id);
+      if (!el) return;
+      el.textContent = label;
+      el.className = `severity-badge ${getSeverityBadgeClass(label)}`;
+    });
+}
+
+function captureRecord(force = false) {
+    const now = Date.now();
+    const profile = state.profiles.find(item => item.profileId === state.activeProfileId);
+    if (!profile || isWithinFirstReadingDelay()) return;
+    if (!force && !state.settings.autoCapture) return;
+    if (!force && now - state.lastCaptureAt < PROJECT_CONFIG.runtime.autoCaptureCooldownMs) return;
+    if (!force && state.dominantConfidence < PROJECT_CONFIG.runtime.autoCaptureConfidenceMin && getConnectedSensorCount() === 0) return;
+    const assessment = computeAssessment();
+    state.lastCaptureAt = now;
+    const record = {
+        recordId: createProfileId(),
+        sessionId: state.session.id,
+        profileId: profile.profileId,
+        profileName: profile.name,
+        source: state.settings.demoSensors ? "demo" : "live",
+        quality: assessment.connectedSensors === 4 ? "complete" : "partial",
+        timestamp: new Date().toLocaleString(),
+        emotion: state.dominantEmotion,
+        confidence: state.dominantConfidence,
+        hr: state.sensorValues.hr,
+        gsr: state.sensorValues.gsr,
+        temp: state.sensorValues.temp,
+        motion: state.sensorValues.motion,
+        eyebag: Math.round(state.visualFatigue.eyebag),
+        wrinkle: Math.round(state.visualFatigue.wrinkle),
+        fatigue: Math.round(state.visualFatigue.fatigue),
+        integratedScore: assessment.integratedScore,
+        decision: assessment.decision,
+        decisionClass: assessment.decisionClass,
+        connectedSensors: assessment.connectedSensors,
+        narrative: assessment.level === "Severe" ? "Elevated integrated evidence detected." : assessment.level === "Moderate" ? "Monitor the participant because current evidence is above baseline." : assessment.level === "Mild" ? "Slight elevation; continue observation." : "No significant concern visible from the current snapshot."
+    };
+    if (window.PsycheScanBackend) window.PsycheScanBackend.persistTelemetry({ kind: "record", payload: record });
+    state.records.unshift(record);
+    state.reports.unshift({
+        reportId: createProfileId(),
+        profileId: profile.profileId,
+        profileName: profile.name,
+        timestamp: record.timestamp,
+        emotion: record.emotion,
+        integratedScore: record.integratedScore,
+        decision: record.decision,
+        decisionClass: record.decisionClass,
+    });
+    if (state.records.length > 240) state.records.pop();
+    if (state.reports.length > 240) state.reports.pop();
+    persistCollections();
+    renderInputRecords();
+    renderReports();
+    if (state.page === "profiles") renderProfiles();
+    updateStatusPanel();
+}
+
+function renderInputRecords() {
+    const rows = state.records.map((r, i) => `<tr data-record-index="${i}">
+        <td>${escapeHtml(r.timestamp)}</td>
+        <td>${escapeHtml(r.emotion)}</td>
+        <td>${escapeHtml(r.confidence)}%</td>
+        <td>${escapeHtml(r.hr ?? "--")}</td>
+        <td>${escapeHtml(r.gsr ?? "--")}</td>
+        <td>${escapeHtml(r.temp ?? "--")}</td>
+        <td>${escapeHtml(r.motion ?? "--")}</td>
+        <td>${escapeHtml(r.eyebag)}%</td>
+        <td>${escapeHtml(r.wrinkle)}%</td>
+        <td>${escapeHtml(r.fatigue)}%</td>
+        <td><span class="badge ${getSeverityBadgeClass(r.decision)}">${escapeHtml(r.decision)}</span></td>
+    </tr>`).join("");
+    if ($("inputTableBody")) $("inputTableBody").innerHTML = rows;
+    if ($("recordCountBadge")) $("recordCountBadge").textContent = `${state.records.length} Records`;
+}
+
+function renderReports() {
+    if ($("reportCountBadge")) $("reportCountBadge").textContent = `${state.reports.length} Records`;
+    if ($("reportTableBody")) $("reportTableBody").innerHTML = state.reports.map(r => `<tr>
+        <td>${escapeHtml(r.timestamp)}</td>
+        <td>${escapeHtml(r.emotion)}</td>
+        <td>${escapeHtml(r.integratedScore)}</td>
+        <td><span class="badge ${getSeverityBadgeClass(r.decision)}">${escapeHtml(r.decision)}</span></td>
+        <td>${escapeHtml(r.profileName || r.participantId || "—")}</td>
+    </tr>`).join("");
+
+    const reportInputs = $("reportInputTableBody");
+    if (reportInputs) {
+        reportInputs.innerHTML = state.records.map((record, index) => `
+            <tr data-record-index="${index}">
+                <td>${escapeHtml(record.timestamp)}</td>
+                <td>${escapeHtml(record.emotion)}</td>
+                <td>${escapeHtml(record.confidence)}%</td>
+                <td>${escapeHtml(record.hr ?? "--")}</td>
+                <td>${escapeHtml(record.gsr ?? "--")}</td>
+                <td>${escapeHtml(record.temp ?? "--")}</td>
+                <td>${escapeHtml(record.motion ?? "--")}</td>
+                <td>${escapeHtml(record.eyebag ?? "--")}</td>
+                <td>${escapeHtml(record.wrinkle ?? "--")}</td>
+                <td>${escapeHtml(record.fatigue ?? "--")}</td>
+                <td><span class="badge ${getSeverityBadgeClass(record.decision)}">${escapeHtml(record.decision)}</span></td>
+            </tr>
+        `).join("");
+    }
+}
+
+function openRecordModal(index) {
+    const r = state.records[index];
+    if (!r || !$("recordDetailGrid")) return;
+    $("recordDetailGrid").innerHTML = Object.entries({
+        Timestamp: r.timestamp,
+        "Patient profile": r.profileName || state.profiles.find(profile => profile.profileId === r.profileId)?.name || r.participantId || "—",
+        Emotion: `${r.emotion} (${r.confidence}%)`,
+        "Integrated score": `${r.integratedScore}/100`,
+        Decision: r.decision,
+        "Heart rate": r.hr ?? "--",
+        GSR: r.gsr ?? "--",
+        Temperature: r.temp ?? "--",
+        Motion: r.motion ?? "--",
+        "Eyebag score": `${r.eyebag}%`,
+        "Wrinkle score": `${r.wrinkle}%`,
+        "Fatigue score": `${r.fatigue}%`,
+        Narrative: r.narrative
+    }).map(([k, v]) => `<div class="record-detail-item"><span>${escapeHtml(k)}</span><strong>${escapeHtml(v)}</strong></div>`).join("");
+    if ($("recordModal")) {
+        $("recordModal").classList.add("show");
+        $("recordModal").setAttribute("aria-hidden", "false");
+    }
+}
+
+function bindReports() {
+    if ($("exportCsvBtn")) $("exportCsvBtn").addEventListener("click", exportCsv);
+    if ($("savePdfBtn")) $("savePdfBtn").addEventListener("click", savePdf);
+    if ($("clearReportsBtn")) $("clearReportsBtn").addEventListener("click", () => {
+        state.records = [];
+        state.reports = [];
+        persistCollections();
+        renderInputRecords();
+        renderReports();
+        updateStatusPanel();
+    });
+
+    const toggleButton = $("toggleDataInputsBtn");
+    const modal = $("reportInputsModal");
+    const closeButton = $("closeReportInputsModalBtn");
+    if (toggleButton && modal && closeButton) {
+        const closeDataInputs = () => {
+            modal.classList.remove("show");
+            modal.setAttribute("aria-hidden", "true");
+            toggleButton.focus();
+        };
+        const openDataInputs = () => {
+            modal.classList.add("show");
+            modal.setAttribute("aria-hidden", "false");
+            closeButton.focus();
+        };
+        toggleButton.addEventListener("click", openDataInputs);
+        closeButton.addEventListener("click", closeDataInputs);
+        modal.addEventListener("click", event => {
+            if (event.target === modal) closeDataInputs();
+        });
+        document.addEventListener("keydown", event => {
+            if (event.key === "Escape" && modal.classList.contains("show")) closeDataInputs();
+        });
+        modal.addEventListener("click", event => {
+            const row = event.target.closest("tr[data-record-index]");
+            if (!row) return;
+            closeDataInputs();
+            openRecordModal(Number(row.dataset.recordIndex));
+        });
+    }
+}
+
+function closePatientManagementModal() {
+    const modal = $("patientManagementModal");
+    const openButton = $("openPatientManagementBtn");
+    if (!modal) return;
+    modal.classList.remove("show");
+    modal.setAttribute("aria-hidden", "true");
+    openButton?.focus();
+}
+
+function bindPatientManagementModal() {
+    const openButton = $("openPatientManagementBtn");
+    const modal = $("patientManagementModal");
+    const closeButton = $("closePatientManagementModalBtn");
+    if (!openButton || !modal || !closeButton) return;
+
+    const closeModal = closePatientManagementModal;
+    openButton.addEventListener("click", () => {
+        modal.classList.add("show");
+        modal.setAttribute("aria-hidden", "false");
+        closeButton.focus();
+    });
+    closeButton.addEventListener("click", closeModal);
+    modal.addEventListener("click", event => {
+        if (event.target === modal) closeModal();
+    });
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape" && modal.classList.contains("show")) closeModal();
+    });
+}
+
+async function populateCameraDevices() {
+    if (!navigator.mediaDevices?.enumerateDevices || !$("cameraDeviceSelect")) return;
+    try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cams = devices.filter(d => d.kind === "videoinput");
+        const select = $("cameraDeviceSelect");
+        select.replaceChildren(new Option("Auto / Default camera", "auto"));
+        cams.forEach((device, index) => {
+            const option = new Option(device.label || `Camera ${index + 1}`, device.deviceId);
+            select.add(option);
+        });
+        if (state.settings.cameraDeviceId && state.settings.cameraDeviceId !== "auto") select.value = state.settings.cameraDeviceId;
+    } catch (e) {
+        console.warn(e);
+    }
+}
+
+function bindSettings() {
+    if ($("saveSettingsBtn")) $("saveSettingsBtn").addEventListener("click", async () => {
+        state.settings.theme = $("themeSelect")?.value || state.settings.theme;
+        state.settings.appearance = $("appearanceSelect")?.value || state.settings.appearance || "light";
+        state.settings.cameraDeviceId = $("cameraDeviceSelect")?.value || "auto";
+        state.settings.cameraFacing = $("cameraFacingSelect")?.value || "auto";
+        state.settings.mirrorCamera = !!$("mirrorCameraToggle")?.checked;
+        state.settings.showLandmarks = !!$("showLandmarksToggle")?.checked;
+        state.settings.detectionInterval = Number($("detectionIntervalSelect")?.value || 160);
+        state.settings.detectorInputSize = Number($("detectorSizeSelect")?.value || 512);
+        state.settings.detectionProfile = $("detectionProfileSelect")?.value || "phone-strong";
+        state.settings.modelSource = $("modelSourceSelect")?.value || "remote";
+        state.settings.smoothingFactor = Number($("smoothingSelect")?.value || 0.4);
+        state.settings.observationDurationSec = $("settingsObservationDurationSelect")?.value || "180";
+        state.settings.customDurationSec = Math.round(Number($("settingsCustomObservationMinutes")?.value || 3) * 60);
+        state.settings.firstReadingDelaySec = Number($("settingsFirstReadingDelaySelect")?.value || 0);
+        state.settings.connectionMode = $("connectionModeSelect")?.value || "serial";
+        state.settings.samplingIntervalMs = Number($("samplingIntervalSelect")?.value || 1000);
+        state.settings.autoCapture = !!$("autoCaptureToggle")?.checked;
+        state.settings.demoSensors = !!$("demoSensorsToggle")?.checked;
+        state.settings.wsUrl = $("wsUrlInput")?.value?.trim() || PROJECT_CONFIG.hardware.wsUrl;
+        state.settings.bleServiceUuid = ($("bleServiceUuidInput")?.value?.trim() || "6e400001-b5a3-f393-e0a9-e50e24dcca9e").toLowerCase();
+        state.settings.bleCharacteristicUuid = ($("bleCharacteristicUuidInput")?.value?.trim() || "6e400003-b5a3-f393-e0a9-e50e24dcca9e").toLowerCase();
+        saveSettings();
+        persistCollections();
+        applyThemeSettings();
+        renderAll();
+        buildCharts();
+        updateStatusPanel();
+        if (state.cameraActive) restartDetectionLoop();
+        if ($("systemStatus")) $("systemStatus").textContent = "Settings Saved";
+        await populateCameraDevices();
+    });
+    
+    if ($("resetSettingsBtn")) $("resetSettingsBtn").addEventListener("click", async () => {
+        state.settings = {
+            ...state.settings,
+            theme: "royal-violet",
+            appearance: "light",
+            mirrorCamera: true,
+            showLandmarks: true,
+            detectionInterval: 160,
+            detectorInputSize: 512,
+            smoothingFactor: 0.4,
+            firstReadingDelaySec: 0,
+            observationDurationSec: 180,
+            customDurationSec: 180,
+            connectionMode: "serial",
+            samplingIntervalMs: 1000,
+            autoCapture: true,
+            demoSensors: false,
+            detectionProfile: "phone-strong",
+            modelSource: "remote",
+            cameraDeviceId: "auto",
+            cameraFacing: "auto",
+            wsUrl: PROJECT_CONFIG.hardware.wsUrl,
+            bleServiceUuid: PROJECT_CONFIG.hardware.bleServiceUuid,
+            bleCharacteristicUuid: PROJECT_CONFIG.hardware.bleCharacteristicUuid
+        };
+        saveSettings();
+        applyThemeSettings();
+        renderAll();
+        buildCharts();
+        updateStatusPanel();
+        if (state.cameraActive) restartDetectionLoop();
+        if ($("systemStatus")) $("systemStatus").textContent = "Settings Reset";
+        await populateCameraDevices();
+    });
+
+    ["wsUrlInput", "bleServiceUuidInput", "bleCharacteristicUuidInput"].forEach(id => {
+        const control = $(id);
+        if (!control || control.dataset.transportSettingBound) return;
+        control.dataset.transportSettingBound = "1";
+        control.addEventListener("change", () => {
+            if (id === "wsUrlInput") {
+                state.settings.wsUrl = control.value.trim() || PROJECT_CONFIG.hardware.wsUrl;
+            } else if (id === "bleServiceUuidInput") {
+                state.settings.bleServiceUuid = control.value.trim().toLowerCase();
+            } else {
+                state.settings.bleCharacteristicUuid = control.value.trim().toLowerCase();
+            }
+            saveSettings();
+        });
+    });
+
+    ["settingsObservationDurationSelect", "settingsFirstReadingDelaySelect", "settingsCustomObservationMinutes"].forEach(id => {
+        const control = $(id);
+        if (!control || control.dataset.sessionBound) return;
+        control.dataset.sessionBound = "1";
+        control.addEventListener("change", () => {
+            if (id === "settingsObservationDurationSelect") {
+                state.settings.observationDurationSec = control.value;
+            } else if (id === "settingsCustomObservationMinutes") {
+                state.settings.customDurationSec = Math.round(Number(control.value || 3) * 60);
+            } else {
+                state.settings.firstReadingDelaySec = Number(control.value || 0);
+            }
+            saveSettings();
+            buildCharts();
+            updateStatusPanel();
+        });
+    });
+
+    const dashboardBindings = [
+        ["dashboardDetectionInterval", "detectionInterval", value => Number(value)],
+        ["dashboardDetectorSize", "detectorInputSize", value => Number(value)],
+        ["dashboardDetectionProfile", "detectionProfile", value => value],
+        ["dashboardSmoothing", "smoothingFactor", value => Number(value)],
+        ["dashboardObservationDuration", "observationDurationSec", value => value],
+        ["dashboardFirstReadingDelay", "firstReadingDelaySec", value => Number(value)],
+        ["dashboardConnectionMode", "connectionMode", value => value]
+    ];
+    dashboardBindings.forEach(([id, key, convert]) => {
+        const control = $(id);
+        if (!control || control.dataset.dashboardBound) return;
+        control.dataset.dashboardBound = "1";
+        control.addEventListener("change", () => {
+            state.settings[key] = convert(control.value);
+            saveSettings();
+            applyThemeSettings();
+            if (key === "detectionInterval" || key === "detectorInputSize" || key === "detectionProfile" || key === "smoothingFactor") {
+                if (state.cameraActive) restartDetectionLoop();
+            }
+            if (key === "observationDurationSec") buildCharts();
+            updateStatusPanel();
+        });
+    });
+
+    [["dashboardAutoCapture", "autoCapture"], ["dashboardDemoSensors", "demoSensors"]].forEach(([id, key]) => {
+        const control = $(id);
+        if (!control || control.dataset.dashboardBound) return;
+        control.dataset.dashboardBound = "1";
+        control.addEventListener("change", () => {
+            state.settings[key] = control.checked;
+            saveSettings();
+            applyThemeSettings();
+            renderAll();
+        });
+    });
+}
+
+async function loadModels() {
+    if (!window.faceapi) {
+        if ($("modelStatusText")) $("modelStatusText").textContent = "face-api missing";
+        return;
+    }
+    const remote = "https://justadudewhohacks.github.io/face-api.js/models";
+    const bases = state.settings.modelSource === "local" ? ["./models", remote] : [remote, "./models"];
+    state.modelsLoaded = false;
+    state.modelDetector = "tiny";
+    for (const base of bases) {
+        try {
+            if ($("modelStatusText")) $("modelStatusText").textContent = `Loading from ${base === "./models" ? "local" : "remote"}...`;
+            await faceapi.nets.tinyFaceDetector.loadFromUri(base);
+            await faceapi.nets.faceLandmark68Net.loadFromUri(base);
+            await faceapi.nets.faceExpressionNet.loadFromUri(base);
+            if (["strong", "phone-strong"].includes(state.settings.detectionProfile || "")) {
+                try {
+                    await faceapi.nets.ssdMobilenetv1.loadFromUri(base);
+                    state.modelDetector = "ssd";
+                } catch (e) {
+                    state.modelDetector = "tiny";
+                }
+            }
+            state.modelsLoaded = true;
+            if ($("modelStatusText")) $("modelStatusText").textContent = `Loaded (${state.modelDetector.toUpperCase()})`;
+            if ($("systemStatus")) $("systemStatus").textContent = "Models Ready";
+            return;
+        } catch (e) {
+            console.warn(e);
+        }
+    }
+    if ($("modelStatusText")) $("modelStatusText").textContent = "Load Failed";
+    alert("Model files could not be loaded. Keep a models folder beside index.html or use internet for remote loading.");
+}
+
+async function startCamera() {
+    if (!state.activeProfileId) {
+        alert("Select a patient profile before starting monitoring.");
+        return;
+    }
+    try {
+        if (!state.modelsLoaded) {
+            await loadModels();
+            if (!state.modelsLoaded) return;
+        }
+        if (state.stream) stopCamera(false);
+        const video = { width: { ideal: 1280 }, height: { ideal: 720 } };
+        if (state.settings.cameraDeviceId && state.settings.cameraDeviceId !== "auto") {
+            video.deviceId = { exact: state.settings.cameraDeviceId };
+        } else if (state.settings.cameraFacing && state.settings.cameraFacing !== "auto") {
+            video.facingMode = { ideal: state.settings.cameraFacing };
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+        state.stream = stream;
+        if ($("video")) $("video").srcObject = stream;
+        if ($("liveVideo")) $("liveVideo").srcObject = stream;
+        await $("video").play();
+        await $("liveVideo").play();
+        state.cameraActive = true;
+        setStatusChip($("cameraBadge"), "muted", "LIVE");
+        setStatusChip($("liveStatusBadge"), "muted", "LIVE");
+        if ($("cameraStatusText")) $("cameraStatusText").textContent = "Active";
+        if ($("systemStatus")) $("systemStatus").textContent = "Streaming";
+        await populateCameraDevices();
+        restartDetectionLoop();
+    } catch (e) {
+        console.error(e);
+        state.cameraActive = false;
+        setStatusChip($("cameraBadge"), "danger", "ERROR");
+        setStatusChip($("liveStatusBadge"), "danger", "ERROR");
+        if ($("cameraStatusText")) $("cameraStatusText").textContent = "Unavailable";
+        alert("Camera unavailable or permission denied.");
+    }
+}
+
+async function runDetectionFrame() {
+    if (state.detectionFrameActive || !state.cameraActive || !state.modelsLoaded || !$("video").videoWidth) return;
+    state.detectionFrameActive = true;
+    try {
+        const threshold = state.settings.detectionProfile === "standard"
+            ? PROJECT_CONFIG.runtime.detectionThresholdStandard
+            : PROJECT_CONFIG.runtime.detectionThresholdStrong;
+        const options = state.modelDetector === "ssd" 
+            ? new faceapi.SsdMobilenetv1Options({ minConfidence: threshold, maxResults: 1 })
+            : new faceapi.TinyFaceDetectorOptions({ inputSize: state.settings.detectorInputSize, scoreThreshold: threshold });
+        const result = await faceapi.detectSingleFace($("video"), options).withFaceLandmarks().withFaceExpressions();
+        drawDetection(result, "overlay", "video");
+        drawDetection(result, "liveOverlay", "liveVideo");
+        if (!result) {
+            if ($("faceCountText")) $("faceCountText").textContent = "0 face";
+            if ($("dominantEmotion")) $("dominantEmotion").textContent = "No Face";
+            if ($("dominantConfidence")) $("dominantConfidence").textContent = "0%";
+            state.dominantEmotion = "No Face";
+            state.dominantConfidence = 0;
+            state.emotionRaw = { neutral: 0, happy: 0, sad: 0, angry: 0, fearful: 0, disgusted: 0, surprised: 0 };
+            state.visualFatigue = { eyebag: 0, wrinkle: 0, fatigue: 0 };
+            smoothExpressions(state.emotionRaw);
+            renderProbabilities();
+            renderLiveStatCards();
+            updateMetrics();
+            return;
+        }
+        if ($("faceCountText")) $("faceCountText").textContent = "1 face";
+        state.emotionRaw = {
+            neutral: result.expressions.neutral || 0,
+            happy: result.expressions.happy || 0,
+            sad: result.expressions.sad || 0,
+            angry: result.expressions.angry || 0,
+            fearful: result.expressions.fearful || 0,
+            disgusted: result.expressions.disgusted || 0,
+            surprised: result.expressions.surprised || 0
+        };
+        smoothExpressions(state.emotionRaw);
+        const [dominant, score] = getDominantExpression(state.emotionSmoothed);
+        state.dominantEmotion = capitalize(dominant);
+        state.dominantConfidence = Math.round(score * 100);
+        computeVisualFatigue($("video"), result.landmarks);
+        if ($("dominantEmotion")) $("dominantEmotion").textContent = state.dominantEmotion;
+        if ($("dominantConfidence")) $("dominantConfidence").textContent = `${state.dominantConfidence}%`;
+        const assessment = computeAssessment();
+        pushHistory(assessment.integratedScore);
+        renderProbabilities();
+        renderLiveStatCards();
+        updateMetrics();
+        captureRecord();
+    } catch (e) {
+        console.error(e);
+    } finally {
+        state.detectionFrameActive = false;
+    }
+}
+
+function normalizePacket(data) {
+    if (!data || typeof data !== "object") return {};
+    const x = { ...data };
+    if (x.eda !== undefined && x.gsr === undefined) x.gsr = x.eda;
+    if (x.temperature !== undefined && x.temp === undefined) x.temp = x.temperature;
+    if (x.acc !== undefined && x.motion === undefined) x.motion = x.acc;
+    if (x.accMag !== undefined && x.motion === undefined) x.motion = x.accMag;
+    if (x.pulse !== undefined && x.hr === undefined) x.hr = x.pulse;
+    ["hr", "gsr", "temp", "tempDrop", "motion"].forEach(key => {
+        if (Object.prototype.hasOwnProperty.call(x, key)) x[key] = normalizeTelemetryNumber(x[key]);
+    });
+    if (!Object.prototype.hasOwnProperty.call(x, "finger") && x.max30102 === true) x.finger = true;
+    if (!Object.prototype.hasOwnProperty.call(x, "gsrSkin") && x.gsrConnected === true) x.gsrSkin = true;
+    if (!Object.prototype.hasOwnProperty.call(x, "tempSkin") && x.ds18b20 === true) x.tempSkin = true;
+    return x;
+}
+
+function isValidSensorValue(key, value) {
+    const thresholds = PROJECT_CONFIG.biomarkers[key];
+    return Number.isFinite(value) &&
+        value >= thresholds.validMin &&
+        value <= thresholds.validMax;
+}
+
+function applyIncomingPacket(data, raw, source = "serial") {
+    const p = normalizePacket(data);
+    state.lastPacketTimestamp = Date.now();
+    state.lastPacketRaw = raw;
+    if ($("lastPacketTime")) $("lastPacketTime").textContent = humanTime(state.lastPacketTimestamp);
+    if ($("lastPacketRaw")) $("lastPacketRaw").textContent = raw;
+    const channels = [
+        ["hr", "max30102", "finger"],
+        ["gsr", "gsr", "gsrSkin"],
+        ["temp", "ds18b20", "tempSkin"],
+        ["motion", "mpu6050", null]
+    ];
+    channels.forEach(([key, sensorId, contactKey]) => {
+        const contact = contactKey ? p[contactKey] !== false : true;
+        if (Object.prototype.hasOwnProperty.call(p, key)) {
+            if (isValidSensorValue(key, p[key]) && contact) {
+                state.sensorValues[key] = p[key];
+                state.sensorContact[key] = true;
+                markSensorConnected(sensorId);
+            } else {
+                if (typeof p[key] === "number") console.warn(`Ignored out-of-range ${key} sensor value.`);
+                state.sensorValues[key] = null;
+                state.sensorContact[key] = false;
+            }
+        } else if (contactKey && p[contactKey] === false) {
+            state.sensorValues[key] = null;
+            state.sensorContact[key] = false;
+        }
+    });
+    if (Object.prototype.hasOwnProperty.call(p, "tempDrop")) {
+        state.sensorValues.tempDrop = Number.isFinite(p.tempDrop) &&
+            p.tempDrop >= 0 &&
+            p.tempDrop <= PROJECT_CONFIG.runtime.maxTemperatureDrop
+            ? p.tempDrop
+            : null;
+    } else state.sensorValues.tempDrop = null;
+    updateSensorPresence();
+    const assessment = computeAssessment();
+    pushHistory(assessment.integratedScore);
+    renderAll({ tables: false });
+    captureRecord();
+    if ($("systemStatus")) $("systemStatus").textContent = `${source.toUpperCase()} Packet`;
+}
+
+function processPacketChunk(chunk, source = "serial") {
+    if (source === "ws") {
+        const packet = String(chunk).trim();
+        if (!packet) return;
+        try {
+            applyIncomingPacket(JSON.parse(packet), packet, source);
+        } catch (e) {
+            console.warn("Invalid JSON packet", packet, e);
+        }
+        return;
+    }
+
+    const key = source === "ble" ? "bleBuffer" : null;
+    let merged = chunk;
+    if (key) merged = (state[key] || "") + chunk;
+    const maxLineBytes = PROJECT_CONFIG.runtime.maxSensorLineBytes;
+    if (key && merged.length > maxLineBytes) {
+        console.warn("Discarding an oversized incomplete BLE line.");
+        const lastNewline = merged.lastIndexOf("\n");
+        merged = lastNewline >= 0 ? merged.slice(lastNewline + 1) : merged.slice(-maxLineBytes);
+    }
+    const lines = String(merged).split(/\r?\n/);
+    const tail = lines.pop();
+    if (key) state[key] = tail;
+    lines.forEach(line => {
+        const t = line.trim();
+        if (!t) return;
+        try {
+            applyIncomingPacket(JSON.parse(t), t, source);
+        } catch (e) {
+            console.warn("Invalid JSON packet", t, e);
+        }
+    });
+}
+
+function applySerialData(data, raw) {
+    applyIncomingPacket(data, raw, "serial");
+}
+
+async function connectBle() {
+    if (!navigator.bluetooth) {
+        alert("Web Bluetooth is not available in this browser.");
+        return;
+    }
+    if (state.bleConnecting || state.bleConnected) return;
+    state.bleConnecting = true;
+    state.bleBuffer = "";
+    try {
+        const service = ($("bleServiceUuidInput")?.value?.trim() || state.settings.bleServiceUuid || "6e400001-b5a3-f393-e0a9-e50e24dcca9e").toLowerCase();
+        const characteristic = ($("bleCharacteristicUuidInput")?.value?.trim() || state.settings.bleCharacteristicUuid || "6e400003-b5a3-f393-e0a9-e50e24dcca9e").toLowerCase();
+        const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [service] }] });
+        state.bleDevice = device;
+        state.bleDisconnectHandler = () => handleBleDisconnected(device);
+        device.addEventListener("gattserverdisconnected", state.bleDisconnectHandler);
+        const server = await device.gatt.connect();
+        const svc = await server.getPrimaryService(service);
+        const chr = await svc.getCharacteristic(characteristic);
+        await chr.startNotifications();
+        const decoder = new TextDecoder();
+        state.bleNotificationHandler = event => {
+            processPacketChunk(decoder.decode(event.target.value, { stream: true }), "ble");
+        };
+        chr.addEventListener("characteristicvaluechanged", state.bleNotificationHandler);
+        state.bleServer = server;
+        state.bleCharacteristic = chr;
+        state.bleConnected = true;
+        if ($("bleStatusText")) $("bleStatusText").textContent = "Connected";
+        if ($("systemStatus")) $("systemStatus").textContent = "BLE Connected";
+        renderAll();
+    } catch (e) {
+        if (e.name !== "NotFoundError") {
+            console.error("Bluetooth connection failed", e);
+            alert("Bluetooth connection failed.");
+        }
+        await disconnectBle();
+    } finally {
+        state.bleConnecting = false;
+    }
+}
+
+function handleBleDisconnected(device) {
+    if (state.bleDevice !== device) return;
+    state.bleBuffer = "";
+    if (state.bleCharacteristic && state.bleNotificationHandler) {
+        state.bleCharacteristic.removeEventListener("characteristicvaluechanged", state.bleNotificationHandler);
+    }
+    device.removeEventListener("gattserverdisconnected", state.bleDisconnectHandler);
+    state.bleConnected = false;
+    state.bleDevice = null;
+    state.bleServer = null;
+    state.bleCharacteristic = null;
+    state.bleNotificationHandler = null;
+    state.bleDisconnectHandler = null;
+    if (!anyTransportConnected()) clearSensorReadings();
+    renderAll();
+}
+
+async function disconnectBle() {
+    const device = state.bleDevice;
+    const characteristic = state.bleCharacteristic;
+    if (characteristic && state.bleNotificationHandler) {
+        characteristic.removeEventListener("characteristicvaluechanged", state.bleNotificationHandler);
+    }
+    if (device && state.bleDisconnectHandler) {
+        device.removeEventListener("gattserverdisconnected", state.bleDisconnectHandler);
+    }
+    state.bleBuffer = "";
+    state.bleConnected = false;
+    state.bleDevice = null;
+    state.bleServer = null;
+    state.bleCharacteristic = null;
+    state.bleNotificationHandler = null;
+    state.bleDisconnectHandler = null;
+    if (device?.gatt?.connected) device.gatt.disconnect();
+    if (!anyTransportConnected()) clearSensorReadings();
+}
+
+function scheduleWsReconnect() {
+    if (state.wsManualDisconnect || state.wsReconnectTimer) return;
+    const delay = Math.min(30000, 1000 * (2 ** state.wsReconnectAttempt));
+    state.wsReconnectAttempt += 1;
+    if ($("wsStatusText")) $("wsStatusText").textContent = `Reconnecting in ${Math.ceil(delay / 1000)}s`;
+    state.wsReconnectTimer = setTimeout(() => {
+        state.wsReconnectTimer = null;
+        connectWs(true);
+    }, delay);
+}
+
+function connectWs(isReconnect = false) {
+    try {
+        const url = $("wsUrlInput")?.value?.trim() || state.settings.wsUrl || PROJECT_CONFIG.hardware.wsUrl;
+        const parsedUrl = new URL(url);
+        if (!["ws:", "wss:"].includes(parsedUrl.protocol)) {
+            throw new Error("WebSocket URL must use ws:// or wss://.");
+        }
+        if (window.location.protocol === "https:" && parsedUrl.protocol === "ws:") {
+            if ($("wsStatusText")) $("wsStatusText").textContent = "Blocked: use wss:// on HTTPS";
+            if (!isReconnect) alert("This page uses HTTPS, which blocks ws:// connections. Configure a wss:// endpoint.");
+            return;
+        }
+        state.settings.wsUrl = url;
+        saveSettings();
+        clearTimeout(state.wsReconnectTimer);
+        state.wsReconnectTimer = null;
+        state.wsManualDisconnect = false;
+        if (state.ws) state.ws.close();
+        const ws = new WebSocket(url);
+        state.ws = ws;
+        ws.addEventListener("open", () => {
+            if (state.ws !== ws) return;
+            state.wsReconnectAttempt = 0;
+            state.wsConnected = true;
+            if ($("wsStatusText")) $("wsStatusText").textContent = "Connected";
+            if ($("systemStatus")) $("systemStatus").textContent = "Wi-Fi Connected";
+            renderAll();
+        });
+        ws.addEventListener("message", event => {
+            if (state.ws !== ws) return;
+            if (typeof event.data === "string") processPacketChunk(event.data, "ws");
+        });
+        ws.addEventListener("close", () => {
+            if (state.ws !== ws) return;
+            state.wsConnected = false;
+            if (!anyTransportConnected()) clearSensorReadings();
+            if ($("wsStatusText")) $("wsStatusText").textContent = "Disconnected";
+            renderAll();
+            if (!state.wsManualDisconnect) scheduleWsReconnect();
+        });
+        ws.addEventListener("error", () => {
+            if (state.ws !== ws) return;
+            state.wsConnected = false;
+            if ($("wsStatusText")) $("wsStatusText").textContent = "Connection error";
+        });
+    } catch (e) {
+        console.error("Wi-Fi socket connection failed", e);
+        if ($("wsStatusText")) $("wsStatusText").textContent = "Invalid connection URL";
+        if (!isReconnect) alert(e.message || "Wi-Fi socket connection failed.");
+    }
+}
+
+async function disconnectAllTransports() {
+    await disconnectSerial();
+    await disconnectBle();
+    state.wsManualDisconnect = true;
+    clearTimeout(state.wsReconnectTimer);
+    state.wsReconnectTimer = null;
+    const ws = state.ws;
+    state.ws = null;
+    state.wsConnected = false;
+    if (ws) ws.close();
+    clearSensorReadings();
+    renderAll();
+}
+
+async function disconnectSerial(portAlreadyDisconnected = false) {
+    state.serialKeepReading = false;
+    const port = state.serialPort;
+    if (state.serialReader) {
+        try {
+            await state.serialReader.cancel();
+        } catch (error) {
+            if (!portAlreadyDisconnected) console.warn("Could not cancel the serial read", error);
+        }
+    }
+    if (state.serialReadPromise) {
+        await state.serialReadPromise;
+        state.serialReadPromise = null;
+    }
+    if (port) {
+        try {
+            await port.close();
+        } catch (error) {
+            if (!portAlreadyDisconnected) console.warn("Could not close the serial port", error);
+        }
+    }
+    state.serialPort = null;
+    state.serialConnected = false;
+    if (!anyTransportConnected()) clearSensorReadings();
+    setStatusChip($("serialBadge"), "muted", "DISCONNECTED");
+    if ($("serialStatusText")) $("serialStatusText").textContent = "Disconnected";
+    Object.values(state.sensors).forEach(sensor => {
+        sensor.connected = false;
+        sensor.state = state.settings.demoSensors ? "demo" : "disconnected";
+    });
+    renderAll();
+}
+
+function simulateSensors() {
+    if (!state.settings.demoSensors || anyTransportConnected()) return;
+    const demo = PROJECT_CONFIG.demo;
+    const rand = (min, max) => min + Math.random() * (max - min);
+    state.sensorValues.hr = Math.round(rand(demo.hrMin, demo.hrMax));
+    state.sensorValues.gsr = Number(rand(demo.gsrMin, demo.gsrMax).toFixed(2));
+    state.sensorValues.temp = Number(rand(demo.tempMin, demo.tempMax).toFixed(1));
+    const baselineTemp = state.session.baselineSummary?.temp;
+    state.sensorValues.tempDrop = Number.isFinite(baselineTemp)
+        ? Math.max(0, baselineTemp - state.sensorValues.temp)
+        : 0;
+    state.sensorValues.motion = Number(rand(demo.motionMin, demo.motionMax).toFixed(3));
+    state.sensorContact = { hr: true, gsr: true, temp: true };
+    Object.values(state.sensors).forEach(sensor => {
+        sensor.connected = true;
+        sensor.state = "demo";
+        sensor.lastSeen = Date.now();
+    });
+    state.sensorContact = { hr: true, gsr: true, temp: true, motion: true };
+    updateSensorPresence();
+    const assessment = computeAssessment();
+    pushHistory(assessment.integratedScore);
+    renderAll({ tables: false });
+    captureRecord();
+}
+
+function bindControls() {
+    if ($("loadModelsBtn")) $("loadModelsBtn").addEventListener("click", loadModels);
+    if ($("startCameraBtn")) $("startCameraBtn").addEventListener("click", startCamera);
+    if ($("stopCameraBtn")) $("stopCameraBtn").addEventListener("click", () => stopCamera(true));
+    if ($("captureBaselineBtn")) $("captureBaselineBtn").addEventListener("click", startBaselineCapture);
+    if ($("addPatientBtn")) $("addPatientBtn").addEventListener("click", addPatientProfile);
+    if ($("viewPatientBtn")) $("viewPatientBtn").addEventListener("click", viewActivePatient);
+    if ($("updatePatientBtn")) $("updatePatientBtn").addEventListener("click", updateActivePatient);
+    if ($("deletePatientBtn")) $("deletePatientBtn").addEventListener("click", deleteActivePatient);
+    if ($("clearReadingsBtn")) $("clearReadingsBtn").addEventListener("click", clearLiveReadings);
+    if ($("connectSerialBtn")) $("connectSerialBtn").addEventListener("click", connectSerial);
+    if ($("connectBleBtn")) $("connectBleBtn").addEventListener("click", connectBle);
+    if ($("connectBlePageBtn")) $("connectBlePageBtn").addEventListener("click", connectBle);
+    if ($("connectWsBtn")) $("connectWsBtn").addEventListener("click", connectWs);
+    if ($("connectWsPageBtn")) $("connectWsPageBtn").addEventListener("click", connectWs);
+    if ($("disconnectAllBtn")) $("disconnectAllBtn").addEventListener("click", disconnectAllTransports);
+    if ($("disconnectPageBtn")) $("disconnectPageBtn").addEventListener("click", disconnectAllTransports);
+    if ($("activeProfileSelect")) {
+        $("activeProfileSelect").addEventListener("change", event => {
+            if (state.session.baselineCaptureActive) {
+                alert("Cancel the current baseline capture before changing patients.");
+                event.target.value = state.activeProfileId || "";
+                return;
+            }
+            if (event.target.value) setActiveProfile(event.target.value);
+        });
+    }
+}
+
+function init() {
+    loadSettings();
+    loadCollections();
+    renderProfiles();
+    applyThemeSettings();
+    initHistory();
+    updateClock();
+    renderAll();
+    buildCharts();
+    bindLogin();
+    bindSidebar();
+    bindModeButtons();
+    bindSettings();
+    bindControls();
+    if (navigator.serial && !state.serialDisconnectHandler) {
+        state.serialDisconnectHandler = event => {
+            if (event.target === state.serialPort) disconnectSerial(true);
+        };
+        navigator.serial.addEventListener("disconnect", state.serialDisconnectHandler);
+    }
+    bindReports();
+    bindPatientManagementModal();
+    window.addEventListener("lstm-prediction", event => {
+        state.session.lstmPrediction = event.detail || null;
+        if ($("lstmStatusText")) {
+            const prediction = state.session.lstmPrediction;
+            $("lstmStatusText").textContent = prediction ? `${prediction.class} (${Math.round(prediction.confidence * 100)}%)` : "Waiting for sequence";
+        }
+        updateStatusPanel();
+    });
+    window.addEventListener("lstm-load-error", () => {
+        if ($("lstmStatusText")) $("lstmStatusText").textContent = "Unavailable; retrying";
+    });
+    bindModal();
+    bindInputTable();
+    setInterval(() => {
+        updateClock();
+        updateSensorPresence();
+        simulateSensors();
+        renderSensorGrid("sensorGrid");
+        renderLiveStatCards();
+        updateMetrics();
+        if (typeof renderBaselineWorkflow === "function") renderBaselineWorkflow();
+        updateStatusPanel();
+    }, 2000);
+    let resizeTimer = null;
+    window.addEventListener("resize", () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+        buildCharts();
+        }, 150);
+    });
+    populateCameraDevices();
+    initIcons();
+    updateStatusPanel();
+}
+
+document.addEventListener("DOMContentLoaded", init, { once: true });

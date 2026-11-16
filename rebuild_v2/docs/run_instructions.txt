@@ -1,0 +1,46 @@
+RUN GUIDE — PSYCHESCAN (CpE28 / COEN3133)
+
+1. Open the inner project folder (the one containing server.py and index.html).
+2. Keep the face-api model files in a folder named "models" beside index.html for local model loading.
+3. Configure an operator password in the server process environment. Do not put a real password in project_config.js or commit it to source control.
+   - Windows PowerShell:
+       $env:PSYCHESCAN_OPERATOR_PASSWORD = Read-Host "Set operator password"
+       python server.py
+   - Linux/macOS shell:
+       PSYCHESCAN_OPERATOR_PASSWORD="$(python3 -c 'import getpass; print(getpass.getpass("Set operator password: "))')"; export PSYCHESCAN_OPERATOR_PASSWORD
+       python3 server.py
+   - start_server.bat and start_server.sh also prompt securely when the variable is unset.
+   - The server does not read .env files. .env.example is only a variable-name reference.
+4. Open http://127.0.0.1:8000 in Chrome or Edge and sign in with the configured password.
+5. On the Dashboard, enter a patient name/code and choose Add patient. Select a patient to View profile (baseline, records, and reports), Update patient (change its name/code without breaking its links), or Delete patient. Deleting permanently removes the profile and linked records, reports, history, and telemetry. Capture or update its baseline with Capture baseline.
+6. Use Clear readings to reset the active patient's live sensor/face values and visible trend window. Saved baselines, records, and reports are retained.
+7. Configure the WebSocket URL in Settings (default: ws://10.73.86.82:81). HTTPS pages require a wss:// endpoint.
+
+PROJECT CONFIGURATION
+- Sensor ranges, screening thresholds, hardware defaults, and branding live in project_config.js.
+- Change the WebSocket endpoint in Settings; it is saved with the operator's settings.
+
+WHAT IS STORED IN THE BACKEND
+- settings, patient profiles and baseline summaries
+- active profile and session/history data
+- profile-linked records and reports
+- profile-tagged sensor/emotion/fatigue telemetry
+
+DATABASE FILE
+- `data/dashboard.sqlite3` inside this project folder.
+- Patient profiles and baselines are stored in the `profiles` table; records, reports, session/history data, and telemetry use their corresponding tables/metadata.
+- The browser also keeps a localStorage cache (`psychescan_profiles_v1` and related keys) for recovery while offline. The server database is the shared persistent store.
+- SQLite WAL mode, a five-second busy timeout, and 30-day telemetry retention are enabled.
+
+MODEL TRAINING
+- Use Python 3.10 or 3.11 for the pinned TensorFlow/TFJS conversion stack in requirements.txt.
+- Install training dependencies with: python -m pip install -r requirements.txt
+- Provide recordings from independent participant or session groups, with all four classes represented in at least three groups each.
+- Run: python train_lstm.py --csv cnn-lstm-mental-health-records.csv
+- The trainer splits by group into train/validation/test sets and exports sensor_lstm.keras, tfjs_lstm_model/, lstm_norm_params.json, and label_map.json.
+- The included CSV does not contain enough independent participants/sessions for leakage-safe stratified training; the trainer will report this instead of falling back to a random row split.
+
+IMPORTANT
+- Screening and decision-support only — not a clinical diagnosis substitute.
+- The browser keeps a local cache and a bounded telemetry queue for recovery while the backend is unavailable.
+- The backend is intended for local use; use HTTPS, a protected network, and a production-grade server before deployment outside a trusted local environment.
