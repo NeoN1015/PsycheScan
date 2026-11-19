@@ -1,0 +1,755 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>PsycheScan System Architecture</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: technical dossier for a thesis panel. Sticky contents rail on wide screens,
+   one reading column (~70ch) with full-width figures and tables. Palette follows the
+   PsycheScan app (Royal Violet), with severity colors used only for severity. */
+:root {
+  --bg: #f7f5fc;
+  --paper: #ffffff;
+  --ink: #221a42;
+  --ink-soft: #5d5680;
+  --line: #e2dcf2;
+  --accent: #6a4cf0;
+  --accent-soft: #efeafe;
+  --code-bg: #f1eef9;
+  --sev-minimal: #15803d;
+  --sev-mild: #b45309;
+  --sev-moderate: #c2410c;
+  --sev-severe: #b91c1c;
+  --font-display: "Manrope", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+  --step--1: 0.84rem;
+  --step-0: 1rem;
+  --step-1: 1.2rem;
+  --step-2: 1.5rem;
+  --step-3: 2.1rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1022; --paper: #171a33; --ink: #ece9fb; --ink-soft: #a7a1c9; --line: #2c3056;
+    --accent: #a08cff; --accent-soft: #252450; --code-bg: #1f2242;
+    --sev-minimal: #4ade80; --sev-mild: #fbbf24; --sev-moderate: #fb923c; --sev-severe: #f87171;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1022; --paper: #171a33; --ink: #ece9fb; --ink-soft: #a7a1c9; --line: #2c3056;
+  --accent: #a08cff; --accent-soft: #252450; --code-bg: #1f2242;
+  --sev-minimal: #4ade80; --sev-mild: #fbbf24; --sev-moderate: #fb923c; --sev-severe: #f87171;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15.5px;
+  line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 48px;
+}
+.shell {
+  max-width: 1180px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 40px;
+}
+header.cover {
+  grid-column: 1 / -1;
+  padding-block: 40px 28px;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+}
+.eyebrow {
+  font-size: var(--step--1);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  font-weight: 600;
+}
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; letter-spacing: -0.015em; margin: 0; }
+h1 { font-size: var(--step-3); line-height: 1.15; max-width: 22ch; }
+h2 { font-size: var(--step-2); line-height: 1.2; }
+h3 { font-size: var(--step-1); line-height: 1.3; margin-top: 8px; }
+.cover p { margin: 0; max-width: 70ch; color: var(--ink-soft); }
+.meta-row { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: var(--step--1); color: var(--ink-soft); }
+.meta-row strong { color: var(--ink); font-weight: 600; }
+
+nav.toc {
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + 20px);
+  align-self: start;
+  padding-top: 28px;
+  font-size: var(--step--1);
+}
+nav.toc p { margin: 0 0 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-soft); font-size: 0.75rem; }
+nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: toc; }
+nav.toc li { counter-increment: toc; }
+nav.toc a {
+  display: grid; grid-template-columns: 2.2em 1fr; padding: 4px 8px; border-radius: 6px;
+  color: var(--ink); text-decoration: none;
+}
+nav.toc a::before { content: counter(toc, decimal-leading-zero); color: var(--ink-soft); font-family: var(--font-mono); font-size: 0.75rem; padding-top: 2px; }
+nav.toc a:hover, nav.toc a:focus-visible { background: var(--accent-soft); outline: none; }
+
+main { min-width: 0; display: grid; gap: 56px; padding-top: 28px; }
+section { display: grid; gap: 16px; scroll-margin-top: 16px; min-width: 0; }
+section > p, section > ul, section > ol { margin: 0; max-width: 72ch; }
+.sec-head { display: grid; gap: 4px; }
+.sec-num { font-family: var(--font-mono); font-size: var(--step--1); color: var(--accent); }
+ul, ol { padding-left: 1.3em; }
+li + li { margin-top: 4px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.formula {
+  font-family: var(--font-mono); font-size: 0.88rem; background: var(--code-bg); border-radius: 8px;
+  padding: 14px 16px; overflow-x: auto; white-space: pre; line-height: 1.7; max-width: 100%;
+}
+a { color: var(--accent); }
+
+figure { margin: 0; display: grid; gap: 10px; min-width: 0; }
+.diagram {
+  background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 16px;
+  overflow-x: auto; color: var(--ink);
+}
+.diagram svg { display: block; width: 100%; min-width: 680px; height: auto; }
+figcaption { font-size: var(--step--1); color: var(--ink-soft); max-width: 72ch; }
+figcaption strong { color: var(--ink); }
+
+/* SVG vocabulary, all theme-driven */
+.dg .box { fill: var(--paper); stroke: var(--line); stroke-width: 1.5; }
+.dg .box.key { stroke: var(--accent); stroke-width: 2; }
+.dg .group { fill: var(--accent-soft); stroke: none; }
+.dg .t { fill: var(--ink); font: 600 13px var(--font-body); }
+.dg .s { fill: var(--ink-soft); font: 400 11px var(--font-body); }
+.dg .lbl { fill: var(--ink-soft); font: 500 11px var(--font-mono); }
+.dg .h { fill: var(--accent); font: 700 12px var(--font-body); letter-spacing: 0.06em; }
+.dg .ln { stroke: var(--ink-soft); stroke-width: 1.5; fill: none; }
+.dg .ln.key { stroke: var(--accent); stroke-width: 2; }
+.dg .ln.dash { stroke-dasharray: 5 4; }
+.dg .ah { fill: var(--ink-soft); }
+.dg .ah.key { fill: var(--accent); }
+.dg .sev-mi { fill: var(--sev-minimal); } .dg .sev-ml { fill: var(--sev-mild); }
+.dg .sev-mo { fill: var(--sev-moderate); } .dg .sev-se { fill: var(--sev-severe); }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); max-width: 100%; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); font-weight: 600; background: var(--code-bg); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+.sev { font-weight: 600; white-space: nowrap; }
+.sev.mi { color: var(--sev-minimal); } .sev.ml { color: var(--sev-mild); } .sev.mo { color: var(--sev-moderate); } .sev.se { color: var(--sev-severe); }
+
+details.impl {
+  border: 1px solid var(--line); border-radius: 10px; background: var(--paper); max-width: 72ch;
+}
+details.impl summary {
+  cursor: pointer; padding: 10px 14px; font-size: var(--step--1); font-weight: 600; color: var(--ink-soft);
+  list-style: none; display: flex; gap: 8px; align-items: center;
+}
+details.impl summary::-webkit-details-marker { display: none; }
+details.impl summary::before { content: "+"; font-family: var(--font-mono); color: var(--accent); width: 1em; }
+details.impl[open] summary::before { content: "−"; }
+details.impl summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
+details.impl > div { padding: 0 14px 12px 36px; font-size: 0.9rem; display: grid; gap: 6px; }
+details.impl ul { margin: 0; }
+
+.note {
+  max-width: 72ch; padding: 12px 16px; border-radius: 10px; background: var(--accent-soft);
+  font-size: 0.93rem;
+}
+.note p { margin: 0; }
+
+.two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.panel { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.panel h3 { margin: 0; font-size: 1.02rem; }
+.panel p, .panel ul { margin: 0; font-size: 0.92rem; }
+
+ol.timeline { list-style: none; padding: 0; margin: 0; display: grid; gap: 0; max-width: 78ch; counter-reset: step; }
+ol.timeline li {
+  counter-increment: step; display: grid; grid-template-columns: 2.6em minmax(0, 1fr); gap: 4px 12px;
+  padding: 10px 0; border-bottom: 1px dashed var(--line); margin: 0;
+}
+ol.timeline li::before {
+  content: counter(step); grid-row: span 2; width: 2em; height: 2em; border-radius: 50%;
+  display: grid; place-items: center; background: var(--accent-soft); color: var(--accent);
+  font: 600 0.82rem var(--font-mono);
+}
+.actor { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--accent); font-weight: 600; }
+ol.timeline p { margin: 0; }
+
+footer { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 18px; font-size: var(--step--1); color: var(--ink-soft); }
+
+@media (max-width: 900px) {
+  .shell { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  nav.toc { position: static; padding-top: 20px; }
+  nav.toc ol { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+  .two-col { grid-template-columns: minmax(0, 1fr); }
+  h1 { font-size: 1.75rem; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<div class="shell">
+<header class="cover">
+  <span class="eyebrow">System architecture · CpE Batch 26 · COEN3133</span>
+  <h1>PsycheScan: how the system works, end to end</h1>
+  <p>Real-Time Early Detection System for Mental Health Using Vital Signs Sensors Applying Hybrid CNN-LSTM Algorithms for In-Depth Analysis of Stress and Anxiety Parameters. This document follows one reading from the device and the camera to the saved report, and names the model, rule, and file responsible at each step.</p>
+  <div class="meta-row">
+    <span><strong>Created by</strong> Gerald Esplana</span>
+    <span><strong>Institution</strong> Colegio de Muntinlupa, Computer Engineering</span>
+    <span><strong>Platform</strong> Lenovo ThinkCentre M700 mini PC + ESP32 device</span>
+    <span><strong>Scope</strong> Screening and decision support, not a clinical diagnosis</span>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Contents">
+  <p>Contents</p>
+  <ol>
+    <li><a href="#overview">System at a glance</a></li>
+    <li><a href="#hardware">Device and firmware</a></li>
+    <li><a href="#intake">Sensor data intake</a></li>
+    <li><a href="#face">Facial analysis (CNN)</a></li>
+    <li><a href="#fatigue">Visual fatigue</a></li>
+    <li><a href="#thresholds">Biomarker thresholds</a></li>
+    <li><a href="#fusion">Integrated score</a></li>
+    <li><a href="#lstm">Temporal LSTM</a></li>
+    <li><a href="#session">Session workflow</a></li>
+    <li><a href="#storage">Storage and server</a></li>
+    <li><a href="#ui">User interface map</a></li>
+    <li><a href="#sequence">One session, start to end</a></li>
+    <li><a href="#inventory">Files and models</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- 01 OVERVIEW -->
+<section id="overview">
+  <div class="sec-head"><span class="sec-num">01</span><h2>System at a glance</h2></div>
+  <p>PsycheScan screens a participant for stress and anxiety by combining two independent evidence streams. A device measures four vital signs (heart rate, skin conductance, peripheral temperature, and motion) and an ESP32 microcontroller streams them to the dashboard. A USB webcam supplies the face, which a convolutional neural network (CNN) reads for emotional expression while an image-analysis routine estimates visual fatigue. The dashboard fuses both streams into one Integrated score on a four-level scale (Minimal, Mild, Moderate, Severe), and an LSTM network reports the sustained trend of the vital signs over the last minute.</p>
+  <p>All processing runs locally on the mini PC. The dashboard is a web application that runs in the browser; a small Python server stores patients, records, and reports in a SQLite database on the same machine.</p>
+  <figure>
+    <div class="diagram">
+      <svg class="dg" viewBox="0 0 900 380" role="img" aria-label="Architecture: four device sensors feed the ESP32, which streams JSON to the browser dashboard over Wi-Fi, Bluetooth or USB; the webcam feeds the face pipeline; the dashboard syncs with the Python server, which stores data in SQLite.">
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="ah"/></marker>
+          <marker id="a1k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="ah key"/></marker>
+        </defs>
+        <rect class="group" x="16" y="20" width="170" height="236" rx="12"/>
+        <text class="h" x="30" y="44">DEVICE</text>
+        <rect class="box" x="30" y="58" width="142" height="40" rx="8"/><text class="t" x="42" y="76">Pulse sensor</text><text class="s" x="42" y="90">heart rate · GPIO 35</text>
+        <rect class="box" x="30" y="106" width="142" height="40" rx="8"/><text class="t" x="42" y="124">GSR module</text><text class="s" x="42" y="138">EDA · GPIO 34</text>
+        <rect class="box" x="30" y="154" width="142" height="40" rx="8"/><text class="t" x="42" y="172">DS18B20</text><text class="s" x="42" y="186">temperature · GPIO 4</text>
+        <rect class="box" x="30" y="202" width="142" height="40" rx="8"/><text class="t" x="42" y="220">MPU6050</text><text class="s" x="42" y="234">motion · I²C 21/22</text>
+
+        <rect class="box key" x="226" y="104" width="120" height="70" rx="10"/>
+        <text class="t" x="286" y="134" text-anchor="middle">ESP32</text>
+        <text class="s" x="286" y="152" text-anchor="middle">sample + contact</text>
+        <path class="ln" d="M186 139 H222" marker-end="url(#a1)"/>
+
+        <rect class="box" x="226" y="292" width="120" height="56" rx="10"/>
+        <text class="t" x="286" y="316" text-anchor="middle">USB webcam</text>
+        <text class="s" x="286" y="333" text-anchor="middle">1280 × 720 video</text>
+
+        <rect class="group" x="412" y="20" width="300" height="340" rx="12"/>
+        <text class="h" x="428" y="44">BROWSER DASHBOARD · MINI PC</text>
+        <rect class="box" x="428" y="58" width="268" height="38" rx="8"/><text class="t" x="442" y="82">Sensor intake &amp; validation</text>
+        <rect class="box" x="428" y="104" width="268" height="38" rx="8"/><text class="t" x="442" y="128">Face analysis · CNN + fatigue</text>
+        <rect class="box key" x="428" y="150" width="268" height="38" rx="8"/><text class="t" x="442" y="174">Thresholds &amp; Integrated score</text>
+        <rect class="box" x="428" y="196" width="268" height="38" rx="8"/><text class="t" x="442" y="220">LSTM trend · background worker</text>
+        <rect class="box" x="428" y="242" width="268" height="38" rx="8"/><text class="t" x="442" y="266">Pages, charts, records, reports</text>
+        <rect class="box" x="428" y="300" width="268" height="44" rx="8"/><text class="t" x="442" y="319">Browser cache</text><text class="s" x="442" y="335">keeps working if the server is away</text>
+
+        <path class="ln key" d="M346 128 H384 V77 H424" marker-end="url(#a1k)"/>
+        <text class="lbl" x="352" y="66">JSON · 500 ms</text>
+        <text class="lbl" x="286" y="198" text-anchor="middle">via Wi-Fi :81,</text>
+        <text class="lbl" x="286" y="212" text-anchor="middle">Bluetooth LE or</text>
+        <text class="lbl" x="286" y="226" text-anchor="middle">USB serial</text>
+        <path class="ln" d="M346 320 H392 V123 H424" marker-end="url(#a1)"/>
+
+        <rect class="box" x="760" y="104" width="124" height="70" rx="10"/>
+        <text class="t" x="822" y="134" text-anchor="middle">Python server</text>
+        <text class="s" x="822" y="152" text-anchor="middle">server.py</text>
+        <rect class="box" x="760" y="250" width="124" height="70" rx="10"/>
+        <text class="t" x="822" y="280" text-anchor="middle">SQLite</text>
+        <text class="s" x="822" y="298" text-anchor="middle">dashboard.sqlite3</text>
+        <path class="ln" d="M712 128 H756" marker-start="url(#a1)" marker-end="url(#a1)"/>
+        <text class="lbl" x="716" y="118">/api/*</text>
+        <path class="ln" d="M822 174 V246" marker-start="url(#a1)" marker-end="url(#a1)"/>
+        <text class="lbl" x="830" y="214">SQL</text>
+      </svg>
+    </div>
+    <figcaption><strong>Figure 1.</strong> Two evidence streams (device and camera) meet in the browser dashboard, which scores them and stores results through the local server. Every box runs on the mini PC except the device.</figcaption>
+  </figure>
+</section>
+
+<!-- 02 HARDWARE -->
+<section id="hardware">
+  <div class="sec-head"><span class="sec-num">02</span><h2>Device and firmware</h2></div>
+  <p>The ESP32 runs a cooperative loop that reads each sensor at its own rate, checks that the sensors touch the skin, and sends the latest values every 500 ms. The device only measures; every severity decision is made by the dashboard (Section 06), so the thresholds live in one place.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Sensor</th><th>Interface</th><th>Read every</th><th>How the value is obtained</th><th>Contact check</th></tr></thead>
+      <tbody>
+        <tr><td>Analog pulse sensor (HR)</td><td>ADC, GPIO 35</td><td>10 ms (100 Hz)</td><td>Adaptive-threshold beat detection on the pulse wave; the interval between beats (IBI) gives <code>BPM = 60000 / IBI</code>. Resets if no beat for 2.5 s.</td><td>Signal swing above 80 ADC counts within 200 ms (finger present)</td></tr>
+        <tr><td>GSR module (EDA)</td><td>ADC, GPIO 34</td><td>1 s</td><td>Average of 10 readings, scaled to microsiemens: <code>µS = raw / 4095 × 10</code></td><td>Raw average above 50</td></tr>
+        <tr><td>DS18B20 (temperature)</td><td>1-Wire, GPIO 4</td><td>1 s</td><td>Digital °C reading. The drop is measured from the first reading taken after skin contact begins, and restarts whenever contact is lost.</td><td>Reading between 28 and 40 °C</td></tr>
+        <tr><td>MPU6050 (motion)</td><td>I²C, SDA 21 / SCL 22</td><td>50 ms</td><td>±2 g accelerometer: <code>motion = | √(ax² + ay² + az²) − 1 g |</code> (movement with gravity removed)</td><td>Always reported while the sensor responds</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Every 500 ms the same line of JSON goes out on all three links at once: USB serial (115200 baud), Bluetooth LE (device name <code>ESP32_StressMon</code>, Nordic UART service), and a Wi-Fi WebSocket server on port 81. When a sensor has no skin contact its value is sent as 0 with its contact flag set to false, and the dashboard discards it. The on-board LED toggles once per second to show the device is running.</p>
+  <div class="formula">{"hr":78.0,"finger":true,"gsr":1.05,"gsrSkin":true,"temp":34.2,"tempDrop":0.10,"tempSkin":true,
+ "motion":0.041,"max30102":true,"gsrConnected":true,"ds18b20":true,"mpu6050":true}</div>
+  <details class="impl"><summary>Implemented in</summary><div>
+    <ul>
+      <li><code>ESP32/ESP32_81porsyento/ESP32_81porsyento.ino</code>: <code>readPulseSensor</code>, <code>readGSR</code>, <code>readTemperature</code>, <code>readMPU6050</code>, <code>broadcastSensorData</code>, Bluetooth and Wi-Fi setup</li>
+      <li><code>ESP32/test_4sensors/test_4sensors.ino</code>: bench test sketch for the four sensors</li>
+      <li><code>sensor_examples/</code>: example packets for Serial, BLE, and Wi-Fi</li>
+    </ul>
+  </div></details>
+</section>
+
+<!-- 03 INTAKE -->
+<section id="intake">
+  <div class="sec-head"><span class="sec-num">03</span><h2>Sensor data intake</h2></div>
+  <p>The dashboard accepts the same JSON packet through any of three transports, or generates demo values for practice sessions. Every packet passes through the same normalization and validation before it can influence a score.</p>
+  <figure>
+    <div class="diagram">
+      <svg class="dg" viewBox="0 0 900 250" role="img" aria-label="Sensor path: readings are sampled and contact-checked on the ESP32, broadcast as JSON, carried by WebSocket, Bluetooth or serial, normalized, validated, and then scored.">
+        <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="ah"/></marker>
+        <marker id="a2k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="ah key"/></marker></defs>
+        <text class="h" x="20" y="26">ON THE ESP32</text>
+        <rect class="box" x="20" y="38" width="196" height="66" rx="9"/><text class="t" x="34" y="62">Read sensors</text><text class="s" x="34" y="80">pulse 10 ms · motion 50 ms</text><text class="s" x="34" y="94">GSR and temperature 1 s</text>
+        <rect class="box" x="240" y="38" width="196" height="66" rx="9"/><text class="t" x="254" y="62">Skin-contact checks</text><text class="s" x="254" y="80">finger, GSR on skin,</text><text class="s" x="254" y="94">skin temperature 28–40 °C</text>
+        <rect class="box" x="460" y="38" width="196" height="66" rx="9"/><text class="t" x="474" y="62">Build packet</text><text class="s" x="474" y="80">values, contact flags,</text><text class="s" x="474" y="94">temperature drop</text>
+        <rect class="box key" x="680" y="38" width="200" height="66" rx="9"/><text class="t" x="694" y="62">Send JSON</text><text class="s" x="694" y="80">every 500 ms on USB,</text><text class="s" x="694" y="94">Bluetooth and Wi-Fi</text>
+        <path class="ln" d="M216 71 H236" marker-end="url(#a2)"/><path class="ln" d="M436 71 H456" marker-end="url(#a2)"/><path class="ln" d="M656 71 H676" marker-end="url(#a2)"/>
+        <text class="h" x="20" y="146">IN THE DASHBOARD</text>
+        <rect class="box key" x="680" y="158" width="200" height="72" rx="9"/><text class="t" x="694" y="182">Transport</text><text class="s" x="694" y="200">WebSocket · Bluetooth LE ·</text><text class="s" x="694" y="214">USB serial · demo values</text>
+        <rect class="box" x="460" y="158" width="196" height="72" rx="9"/><text class="t" x="474" y="182">Normalize</text><text class="s" x="474" y="200">aliases → hr, gsr,</text><text class="s" x="474" y="214">temp, motion + contact</text>
+        <rect class="box" x="240" y="158" width="196" height="72" rx="9"/><text class="t" x="254" y="182">Validate</text><text class="s" x="254" y="200">valid range and contact,</text><text class="s" x="254" y="214">otherwise the value is cleared</text>
+        <rect class="box key" x="20" y="158" width="196" height="72" rx="9"/><text class="t" x="34" y="182">Score and record</text><text class="s" x="34" y="200">Integrated score → history</text><text class="s" x="34" y="214">→ auto-captured record</text>
+        <path class="ln key" d="M780 104 V154" marker-end="url(#a2k)"/>
+        <path class="ln" d="M680 194 H660" marker-end="url(#a2)"/><path class="ln" d="M460 194 H440" marker-end="url(#a2)"/><path class="ln" d="M240 194 H220" marker-end="url(#a2)"/>
+      </svg>
+    </div>
+    <figcaption><strong>Figure 2.</strong> The device row runs on the ESP32; the dashboard row runs on every incoming packet. A value that fails validation is set to empty, so it can never be scored.</figcaption>
+  </figure>
+  <div class="two-col">
+    <div class="panel"><h3>Transports</h3><ul>
+      <li><strong>Wi-Fi WebSocket</strong>: connects to the ESP32 at the configured URL (default <code>ws://10.73.86.82:81</code>). On disconnect it retries after 1 s, doubling up to 30 s.</li>
+      <li><strong>Bluetooth LE</strong>: Nordic UART service <code>6e400001-…</code>, notifications on <code>6e400003-…</code>; partial lines are buffered until a newline.</li>
+      <li><strong>USB serial</strong>: Web Serial at 115200 baud, one JSON object per line.</li>
+      <li><strong>Demo sensors</strong>: only when no transport is connected; every 2 s random HR 60–85 bpm, GSR 0.9–1.1 µS, temperature 33–35 °C, motion 0.05–0.20 g.</li>
+    </ul></div>
+    <div class="panel"><h3>Validation rules</h3><ul>
+      <li>Field aliases are accepted: <code>eda</code>→gsr, <code>temperature</code>→temp, <code>acc</code>/<code>accMag</code>→motion, <code>pulse</code>→hr.</li>
+      <li>Contact flags (<code>max30102</code>, <code>gsrConnected</code>, <code>ds18b20</code>) mark the matching value as touching skin.</li>
+      <li>Valid ranges: HR 25–240 bpm, GSR 0–100 µS, temperature 15–45 °C, motion 0–16 g. Anything else, or no contact, clears the value.</li>
+      <li>A sensor not heard from for 6 s is cleared and shown as Waiting or Disconnected.</li>
+      <li>Packets longer than 8192 bytes are discarded.</li>
+    </ul></div>
+  </div>
+  <details class="impl"><summary>Implemented in</summary><div>
+    <ul>
+      <li><code>main_extension.js</code>: <code>connectWs</code>, <code>scheduleWsReconnect</code>, <code>connectBle</code>, <code>processPacketChunk</code>, <code>normalizePacket</code>, <code>isValidSensorValue</code>, <code>applyIncomingPacket</code>, <code>updateSensorPresence</code>, <code>simulateSensors</code></li>
+      <li><code>main.js</code>: <code>connectSerial</code>, <code>readSerialLoop</code></li>
+      <li><code>project_config.js</code>: <code>hardware</code>, <code>biomarkers.*.validMin/validMax</code>, <code>demo</code>, <code>runtime.sensorFreshnessMs</code></li>
+    </ul>
+  </div></details>
+</section>
+
+<!-- 04 FACE -->
+<section id="face">
+  <div class="sec-head"><span class="sec-num">04</span><h2>Facial analysis (CNN)</h2></div>
+  <p>The facial stream uses pretrained convolutional networks from the face-api.js library, running in the browser on the mini PC. On every detection tick the system finds one face, locates 68 facial landmarks, and classifies the expression into seven emotions.</p>
+  <figure>
+    <div class="diagram">
+      <svg class="dg" viewBox="0 0 900 250" role="img" aria-label="Face pipeline: a video frame goes to the face detector, then the 68-point landmark network; the aligned face goes to the expression CNN for emotion probabilities, and the landmarks guide region sampling for visual fatigue.">
+        <defs><marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="ah"/></marker>
+        <marker id="a3k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="ah key"/></marker></defs>
+        <rect class="box" x="16" y="92" width="140" height="66" rx="9"/><text class="t" x="30" y="116">Video frame</text><text class="s" x="30" y="134">every 120/160/220 ms</text>
+        <rect class="box" x="186" y="92" width="160" height="66" rx="9"/><text class="t" x="200" y="116">Face detector</text><text class="s" x="200" y="134">SSD MobileNet V1 or</text><text class="s" x="200" y="148">Tiny Face Detector</text>
+        <rect class="box" x="376" y="92" width="150" height="66" rx="9"/><text class="t" x="390" y="116">Landmark net</text><text class="s" x="390" y="134">68 facial points</text>
+        <rect class="box key" x="566" y="22" width="160" height="66" rx="9"/><text class="t" x="580" y="46">Expression CNN</text><text class="s" x="580" y="64">7 emotion probabilities</text>
+        <rect class="box" x="566" y="162" width="160" height="66" rx="9"/><text class="t" x="580" y="186">Region sampling</text><text class="s" x="580" y="204">under-eye, cheek,</text><text class="s" x="580" y="218">forehead, eye corners</text>
+        <rect class="box key" x="756" y="22" width="128" height="66" rx="9"/><text class="t" x="770" y="46">Smoothed</text><text class="t" x="770" y="62">emotion</text><text class="s" x="770" y="78">EMA, dominant</text>
+        <rect class="box" x="756" y="162" width="128" height="66" rx="9"/><text class="t" x="770" y="186">Eyebag,</text><text class="t" x="770" y="202">wrinkle, fatigue</text><text class="s" x="770" y="218">0–100 each</text>
+        <path class="ln" d="M156 125 H182" marker-end="url(#a3)"/>
+        <path class="ln" d="M346 125 H372" marker-end="url(#a3)"/>
+        <path class="ln key" d="M526 112 H546 V55 H562" marker-end="url(#a3k)"/><text class="lbl" x="534" y="104" text-anchor="end">aligned face</text>
+        <path class="ln" d="M526 138 H546 V195 H562" marker-end="url(#a3)"/><text class="lbl" x="534" y="152" text-anchor="end">landmarks</text>
+        <path class="ln key" d="M726 55 H752" marker-end="url(#a3k)"/>
+        <path class="ln" d="M726 195 H752" marker-end="url(#a3)"/>
+      </svg>
+    </div>
+    <figcaption><strong>Figure 3.</strong> One detection tick. The expression CNN feeds emotion risk; the landmarks drive the visual-fatigue measurement described in Section 05.</figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Model</th><th>Type</th><th>Role</th><th>Used when</th></tr></thead>
+      <tbody>
+        <tr><td>SSD MobileNet V1</td><td>Single-shot detector CNN</td><td>Finds the face box (one face, minimum confidence 0.35)</td><td>Detection profile "Strong" or "External Cam Strong" (the default)</td></tr>
+        <tr><td>Tiny Face Detector</td><td>Lightweight detector CNN</td><td>Finds the face box; input 320, 416, or 512 px (default 512)</td><td>"Standard" profile (confidence 0.45), or if SSD cannot load</td></tr>
+        <tr><td>Face Landmark 68 Net</td><td>CNN regressor</td><td>68 points: eyes, brows, nose, mouth, jaw</td><td>Every detected face</td></tr>
+        <tr><td>Face Expression Net</td><td>CNN classifier</td><td>Probabilities for neutral, happy, sad, angry, fearful, disgusted, surprised</td><td>Every detected face</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Model weights are loaded from the face-api.js model host or from the local <code>models/</code> folder, whichever the Model source setting puts first; the other is the fallback. Raw expression probabilities are smoothed with an exponential moving average before use:</p>
+  <div class="formula">smoothed = smoothed × α + raw × (1 − α)      α = 0.25 (low), 0.40 (balanced, default), 0.60 (strong)
+dominant emotion = the class with the highest smoothed probability; confidence = that probability × 100</div>
+  <p>When no face is found the emotion values reset to zero, the dominant emotion becomes "No Face", and the facial stream drops out of the Integrated score until a face returns.</p>
+  <details class="impl"><summary>Implemented in</summary><div>
+    <ul>
+      <li><code>main_extension.js</code>: <code>loadModels</code>, <code>startCamera</code>, <code>runDetectionFrame</code></li>
+      <li><code>main.js</code>: <code>smoothExpressions</code>, <code>getDominantExpression</code>, <code>drawDetection</code>, <code>restartDetectionLoop</code>, <code>stopCamera</code></li>
+      <li><code>models/</code>: face-api.js weight files and manifests</li>
+    </ul>
+  </div></details>
+</section>
+
+<!-- 05 FATIGUE -->
+<section id="fatigue">
+  <div class="sec-head"><span class="sec-num">05</span><h2>Visual fatigue</h2></div>
+  <p>Visual fatigue is measured from the pixels around the eyes, positioned by the 68 landmarks. Two cues are combined: darker skin under the eyes (eye bags) and extra fine texture on the forehead and eye corners (wrinkles), each compared against the cheek of the same person in the same frame so lighting differences cancel out.</p>
+  <ol>
+    <li><strong>Brightness</strong> of each region is the mean luma: <code>Y = 0.299 R + 0.587 G + 0.114 B</code>.</li>
+    <li><strong>Texture</strong> of each region is the mean absolute luma difference between each pixel and its right and lower neighbours.</li>
+    <li>The face must be large enough: average eye width at least 18 px. A detail factor scales scores down for small faces.</li>
+  </ol>
+  <div class="formula">detail   = clamp((eye width − 18) / 22, 0.15, 1)
+eyebag   = clamp( clamp(cheek Y − under-eye Y, 0, 25) × 4.6 × detail, 0, 100)
+wrinkle  = clamp( clamp(mean(forehead, eye-corner texture) − cheek texture, 0, 14) × 9.2 × detail, 0, 100)
+fatigue  = 0.58 × eyebag + 0.42 × wrinkle          (each then smoothed with the same α as emotions)</div>
+  <p>Each percentage is labelled with the facial bands: 0–24 Minimal, 25–49 Mild, 50–74 Moderate, 75–100 Severe.</p>
+  <details class="impl"><summary>Implemented in</summary><div>
+    <ul><li><code>main.js</code>: <code>computeVisualFatigue</code>, <code>sampleRegionLuma</code>, <code>sampleTextureScore</code>, <code>getBounds</code>, <code>getSeverityLabelFromPercent</code></li></ul>
+  </div></details>
+</section>
+
+<!-- 06 THRESHOLDS -->
+<section id="thresholds">
+  <div class="sec-head"><span class="sec-num">06</span><h2>Biomarker thresholds</h2></div>
+  <p>Each vital sign is classified on its own using the validated thresholds (Table 1). Heart rate and GSR are judged two ways: by the absolute reading and by the percentage rise over the patient's captured baseline. The sensor takes the more severe of the two, so a participant with a low resting heart rate is still flagged when it climbs sharply. Temperature is judged as a drop, because peripheral skin temperature falls under stress; the drop comes from the device packet, otherwise from the captured baseline minus the current reading.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Biomarker</th><th><span class="sev mi">Minimal</span></th><th><span class="sev ml">Mild</span></th><th><span class="sev mo">Moderate</span></th><th><span class="sev se">Severe</span></th><th>Accepted range</th></tr></thead>
+      <tbody>
+        <tr><td>Heart rate (bpm)</td><td>60–85 (baseline)</td><td>86–95 or +10 %</td><td>96–105 or +15–20 %</td><td>&gt; 105 or &gt; +20 %</td><td>25–240</td></tr>
+        <tr><td>GSR / EDA (µS)</td><td>0.9–1.1</td><td>1.2–2.4 or +20–40 %</td><td>2.5–4.0 or +50–100 %</td><td>&gt; 4.0 or &gt; +100 % (up to +400 %)</td><td>0–100</td></tr>
+        <tr><td>Peripheral skin temperature (°C)</td><td>0.0 to −0.2</td><td>−0.3 to −0.8</td><td>−0.9 to −1.5</td><td>≤ −1.6</td><td>15–45 °C reading</td></tr>
+        <tr><td>Motion (RMS, g)</td><td>0.00–0.05</td><td>0.06–0.10</td><td>0.11–0.20</td><td>&gt; 0.20</td><td>0–16</td></tr>
+        <tr><td>Facial scores (%)</td><td>0–24</td><td>25–49</td><td>50–74</td><td>75–100</td><td>0–100</td></tr>
+        <tr><td>Integrated score (/100)</td><td>0–24</td><td>25–44</td><td>45–69</td><td>70–100</td><td>0–100</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Reading the boundaries: a level's lower value counts as that level (86 bpm is Mild), and Severe begins strictly above the Moderate maximum (105 bpm is Moderate, 105.5 bpm is Severe). A rise of exactly +20 % in heart rate or +100 % in GSR stays Moderate. Percentage rules apply once the patient has a captured baseline.</p>
+  <p>The combined sensor level (shown as "Threshold" on the Dashboard and "ESP32 threshold stress" in the Status Summary) is a vote. Each sensor with valid skin contact casts a vote for its own level, GSR casting two. The most severe level that receives any vote becomes the sensor level; with no valid sensor it shows "Waiting for sensor".</p>
+  <details class="impl"><summary>Implemented in</summary><div>
+    <ul>
+      <li><code>project_config.js</code>: <code>biomarkers</code>, <code>severity.score</code>, <code>severity.percentBands</code></li>
+      <li><code>main.js</code>: <code>classifyBiomarkerSeverity</code>, <code>classifySensorStress</code>, <code>getIntegratedSeverityLabel</code></li>
+    </ul>
+  </div></details>
+</section>
+
+<!-- 07 FUSION -->
+<section id="fusion">
+  <div class="sec-head"><span class="sec-num">07</span><h2>Integrated score</h2></div>
+  <p>The Integrated score is a weighted score-level fusion of three risks, each on a 0–100 scale. Only the streams that are present take part, and the weights are renormalised over them, so the score stays meaningful when the camera sees no face or when no sensor is connected.</p>
+  <figure>
+    <div class="diagram">
+      <svg class="dg" viewBox="0 0 900 300" role="img" aria-label="Fusion: emotion risk weighted 0.42, visual fatigue weighted 0.18, and sensor risk weighted 0.40 are combined into a weighted mean over the available streams, giving the Integrated score and its severity band; the LSTM trend is reported beside it.">
+        <defs><marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="ah"/></marker>
+        <marker id="a4k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="ah key"/></marker></defs>
+        <rect class="box" x="16" y="20" width="230" height="62" rx="9"/><text class="t" x="30" y="44">Emotion risk</text><text class="s" x="30" y="62">negative expressions, face only</text>
+        <rect class="box" x="16" y="104" width="230" height="62" rx="9"/><text class="t" x="30" y="128">Visual fatigue</text><text class="s" x="30" y="146">0–100, face only</text>
+        <rect class="box" x="16" y="188" width="230" height="62" rx="9"/><text class="t" x="30" y="212">Sensor risk</text><text class="s" x="30" y="230">level → 0 / 33 / 66 / 100</text>
+        <path class="ln" d="M246 51 H330 V128 H356" marker-end="url(#a4)"/><text class="lbl" x="262" y="44">× 0.42</text>
+        <path class="ln" d="M246 135 H356" marker-end="url(#a4)"/><text class="lbl" x="262" y="128">× 0.18</text>
+        <path class="ln" d="M246 219 H330 V142 H356" marker-end="url(#a4)"/><text class="lbl" x="262" y="212">× 0.40</text>
+        <rect class="box key" x="360" y="96" width="200" height="80" rx="10"/><text class="t" x="374" y="122">Weighted mean</text><text class="s" x="374" y="140">Σ(risk × w) ÷ Σ(w)</text><text class="s" x="374" y="156">over streams present</text>
+        <path class="ln key" d="M560 136 H596" marker-end="url(#a4k)"/>
+        <rect class="box key" x="600" y="96" width="284" height="80" rx="10"/><text class="t" x="614" y="122">Integrated score 0–100</text>
+        <rect class="sev-mi" x="614" y="138" width="62" height="24" rx="5"/><text x="645" y="154" text-anchor="middle" style="fill:var(--paper);font:600 10.5px var(--font-body)">0–24</text>
+        <rect class="sev-ml" x="680" y="138" width="62" height="24" rx="5"/><text x="711" y="154" text-anchor="middle" style="fill:var(--paper);font:600 10.5px var(--font-body)">25–44</text>
+        <rect class="sev-mo" x="746" y="138" width="62" height="24" rx="5"/><text x="777" y="154" text-anchor="middle" style="fill:var(--paper);font:600 10.5px var(--font-body)">45–69</text>
+        <rect class="sev-se" x="812" y="138" width="62" height="24" rx="5"/><text x="843" y="154" text-anchor="middle" style="fill:var(--paper);font:600 10.5px var(--font-body)">70–100</text>
+        <rect class="box" x="600" y="210" width="284" height="62" rx="10" style="stroke-dasharray:5 4"/><text class="t" x="614" y="234">LSTM trend (Section 08)</text><text class="s" x="614" y="252">reported beside the score, not weighted</text>
+        <path class="ln dash" d="M742 176 V206"/>
+      </svg>
+    </div>
+    <figcaption><strong>Figure 4.</strong> Weighted score-level fusion. The colored bands are the Minimal, Mild, Moderate, and Severe cut-offs of the Integrated score.</figcaption>
+  </figure>
+  <div class="formula">emotion risk = clamp(100 × (sad + angry + fearful + 0.8 × disgusted + 0.35 × surprised), 0, 100)
+               + 0.3 × confidence   if the dominant emotion is Sad, Angry, Fearful or Disgusted   (capped at 100)
+sensor risk  = 0 (Minimal) · 33 (Mild) · 66 (Moderate) · 100 (Severe)   from the sensor vote in Section 06
+Integrated   = (0.42·emotion + 0.18·fatigue + 0.40·sensor) ÷ (sum of the weights of the streams present)</div>
+  <p>Two temporal indicators are derived from the recent history of Integrated scores:</p>
+  <ul>
+    <li><strong>Trend</strong>: the average of the last 6 samples compared with the 6 before; a change above +4 is Rising, below −4 Falling, otherwise Stable.</li>
+    <li><strong>Temporal stability</strong>: <code>clamp(1 − variance / 900, 0.12, 0.97)</code> over the last 6 samples, shown with a High, Medium, or Low label that follows the severity level.</li>
+  </ul>
+  <details class="impl"><summary>Implemented in</summary><div>
+    <ul><li><code>main.js</code>: <code>computeAssessment</code>, <code>updateMetrics</code>; weights in <code>project_config.js</code> → <code>fusion</code>; trend threshold <code>runtime.trendDeltaThreshold</code></li></ul>
+  </div></details>
+</section>
+
+<!-- 08 LSTM -->
+<section id="lstm">
+  <div class="sec-head"><span class="sec-num">08</span><h2>Temporal LSTM</h2></div>
+  <p>The LSTM (long short-term memory) network adds the temporal half of the CNN-LSTM design. It reads the last 60 seconds of all four vital signs as a sequence and classifies the sustained level as Minimal, Mild, Moderate, or Severe. Because it looks at the whole minute, a brief spike such as a finger slipping off the pulse sensor does not change its answer, while the instant threshold level may flicker.</p>
+  <figure>
+    <div class="diagram">
+      <svg class="dg" viewBox="0 0 900 230" role="img" aria-label="LSTM pipeline: live history is resampled to a 60-by-4 grid at one sample per second, normalized, and passed through two LSTM layers and a softmax layer in a background worker, producing a level and probabilities for the dashboard.">
+        <defs><marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="ah"/></marker>
+        <marker id="a5k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="ah key"/></marker></defs>
+        <rect class="box" x="16" y="70" width="140" height="80" rx="9"/><text class="t" x="30" y="96">Live history</text><text class="s" x="30" y="114">a sample every</text><text class="s" x="30" y="128">0.5–2 s</text>
+        <rect class="box" x="180" y="70" width="160" height="80" rx="9"/><text class="t" x="194" y="96">Resample to 1 Hz</text><text class="s" x="194" y="114">60 × [hr, gsr, temp, motion]</text><text class="s" x="194" y="128">≥ 80 % fresh seconds</text>
+        <rect class="box" x="364" y="70" width="120" height="80" rx="9"/><text class="t" x="378" y="96">Normalize</text><text class="s" x="378" y="114">(x − mean) ÷ std</text>
+        <rect class="group" x="508" y="18" width="250" height="196" rx="12"/><text class="h" x="522" y="40">BACKGROUND WORKER</text>
+        <rect class="box key" x="522" y="52" width="222" height="28" rx="6"/><text class="t" x="534" y="71">LSTM · 64 units</text>
+        <rect class="box" x="522" y="86" width="222" height="24" rx="6"/><text class="s" x="534" y="102">Dropout 0.2</text>
+        <rect class="box key" x="522" y="116" width="222" height="28" rx="6"/><text class="t" x="534" y="135">LSTM · 32 units</text>
+        <rect class="box" x="522" y="150" width="222" height="24" rx="6"/><text class="s" x="534" y="166">Dropout 0.2</text>
+        <rect class="box key" x="522" y="180" width="222" height="28" rx="6"/><text class="t" x="534" y="199">Dense · 4-way softmax</text>
+        <rect class="box key" x="780" y="70" width="104" height="80" rx="9"/><text class="t" x="792" y="96">Level +</text><text class="t" x="792" y="112">probabilities</text><text class="s" x="792" y="130">every 5 s</text>
+        <path class="ln" d="M156 110 H176" marker-end="url(#a5)"/><path class="ln" d="M340 110 H360" marker-end="url(#a5)"/>
+        <path class="ln key" d="M484 110 H504" marker-end="url(#a5k)"/><path class="ln key" d="M758 110 H776" marker-end="url(#a5k)"/>
+      </svg>
+    </div>
+    <figcaption><strong>Figure 5.</strong> The LSTM runs every 5 seconds in a separate browser worker, so it never competes with the face models for the same TensorFlow engine.</figcaption>
+  </figure>
+  <div class="two-col">
+    <div class="panel"><h3>Input preparation</h3><ul>
+      <li>History samples are placed on a one-second grid; each second takes the latest complete reading, as long as it is at most 3 s old.</li>
+      <li>A prediction runs only when the oldest second is filled and at least 80 % of the 60 seconds have fresh readings. Until then the badge counts up, for example "16/60 S".</li>
+      <li>Values are normalised with the mean and standard deviation saved at training time.</li>
+    </ul></div>
+    <div class="panel"><h3>Training</h3><ul>
+      <li>The current model is a bootstrap model trained on 16,000 synthetic 60-second sequences generated within the Table 1 ranges, with spikes, ramps, and noise.</li>
+      <li>Each sequence is labelled by the worst sustained level using the absolute Table 1 bands: the median of the last 30 s for HR, GSR, and motion, and the temperature decline across the window. The percentage rules need a patient baseline, so they are applied by the threshold level, not the LSTM.</li>
+      <li>It agrees with that rule on 91.3 % of held-out synthetic sequences. Retraining on labelled participant sessions uses the same architecture and replaces the model files.</li>
+    </ul></div>
+  </div>
+  <p>The result appears on the Dashboard (badge "LSTM 60 s" beside "Threshold"), in the Status Summary ("LSTM sustained trend"), and in Settings with its confidence. It is reported alongside the Integrated score and is not part of its weighted mean.</p>
+  <details class="impl"><summary>Implemented in</summary><div>
+    <ul>
+      <li><code>lstm_predictor.js</code>: <code>buildLstmSequence</code>, <code>runLstmPrediction</code>, <code>loadLstmModel</code> (main page)</li>
+      <li><code>lstm_worker.js</code>: loads <code>vendor/tf.min.js</code> (TensorFlow.js 4.22), validates and runs the model</li>
+      <li><code>tfjs_lstm_model/</code>, <code>lstm_norm_params.json</code>, <code>label_map.json</code>: model weights, normalisation, class order</li>
+      <li><code>train_lstm_synthetic.py</code> (current model), <code>train_lstm.py</code> (participant data), <code>lstm_tfjs_export.py</code> (browser export)</li>
+      <li><code>main_extension.js</code>: <code>renderLstmStatus</code></li>
+    </ul>
+  </div></details>
+</section>
+
+<!-- 09 SESSION -->
+<section id="session">
+  <div class="sec-head"><span class="sec-num">09</span><h2>Session workflow</h2></div>
+  <div class="two-col">
+    <div class="panel"><h3>Patient profiles</h3><ul>
+      <li>Each participant gets a profile identified by a name or code, which must be unique.</li>
+      <li>Profiles can be added, viewed, renamed, and deleted from Manage patients; deleting removes the profile's records, reports, and stored readings.</li>
+      <li>Monitoring and baseline capture require an active patient, so every reading is linked to one person.</li>
+    </ul></div>
+    <div class="panel"><h3>Baseline capture</h3><ul>
+      <li>Length follows the Observation window: 3, 4, or 5 minutes, or a custom 1–60 minutes.</li>
+      <li>During capture the session is in the baseline phase; afterwards it moves to the questionnaire phase.</li>
+      <li>At the end the system stores averages of HR, GSR, temperature, and motion, the mean Integrated score, face detection rate, dominant expression, and the fatigue, wrinkle, and eyebag averages on the profile.</li>
+      <li>The baseline temperature becomes the reference for the temperature drop.</li>
+    </ul></div>
+    <div class="panel"><h3>Live history and charts</h3><ul>
+      <li>A history sample (all sensor, face, and score values) is kept at the History sampling rate: 0.5, 1 (default), or 2 s.</li>
+      <li>Charts show a rolling 2-minute window, from −120 s to now.</li>
+      <li>A First reading delay (none, 10, 30, or 60 s) holds back history and records while the participant settles.</li>
+    </ul></div>
+    <div class="panel"><h3>Records and reports</h3><ul>
+      <li>With Auto-capture on, a record is saved at most every 3 s when the face confidence is at least 30 % or a sensor is connected.</li>
+      <li>A record holds the time, patient, emotion and confidence, the four vital signs, eyebag, wrinkle, fatigue, Integrated score, level, and a short narrative; a matching report row is created.</li>
+      <li>Exports: CSV of all records, CSV per patient, and a printable PDF report with the charts.</li>
+    </ul></div>
+  </div>
+  <details class="impl"><summary>Implemented in</summary><div>
+    <ul>
+      <li><code>main.js</code>: <code>startBaselineCapture</code>, <code>finalizeBaseline</code>, <code>getSessionPhase</code>, <code>pushHistory</code>, <code>getWindowHistory</code>, <code>exportCsv</code>, <code>savePdf</code></li>
+      <li><code>main_extension.js</code>: <code>addPatientProfile</code>, <code>updateActivePatient</code>, <code>deleteActivePatient</code>, <code>completeBaselineProfile</code>, <code>captureRecord</code>, <code>exportPatientCsv</code></li>
+    </ul>
+  </div></details>
+</section>
+
+<!-- 10 STORAGE -->
+<section id="storage">
+  <div class="sec-head"><span class="sec-num">10</span><h2>Storage and server</h2></div>
+  <p>Data lives in two places. The browser keeps a working copy so monitoring continues if the server is briefly unavailable, and the Python server keeps the permanent copy in SQLite.</p>
+  <figure>
+    <div class="diagram">
+      <svg class="dg" viewBox="0 0 900 270" role="img" aria-label="Storage: dashboard state is cached in the browser and synchronized to the server through debounced sync calls with revision checks; samples and records are queued and sent in telemetry batches; the server writes them to SQLite tables.">
+        <defs><marker id="a6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="ah"/></marker>
+        <marker id="a6k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="ah key"/></marker></defs>
+        <rect class="box key" x="16" y="96" width="170" height="78" rx="10"/><text class="t" x="30" y="122">Dashboard state</text><text class="s" x="30" y="140">profiles, records, reports,</text><text class="s" x="30" y="154">session, settings</text>
+        <rect class="box" x="240" y="16" width="200" height="62" rx="9"/><text class="t" x="254" y="40">Browser cache</text><text class="s" x="254" y="58">on every change</text>
+        <rect class="box" x="240" y="104" width="200" height="62" rx="9"/><text class="t" x="254" y="128">Sync</text><text class="s" x="254" y="146">350 ms after a change</text>
+        <rect class="box" x="240" y="192" width="200" height="62" rx="9"/><text class="t" x="254" y="216">Telemetry queue</text><text class="s" x="254" y="234">samples + records</text>
+        <path class="ln" d="M186 116 H210 V47 H236" marker-end="url(#a6)"/>
+        <path class="ln key" d="M186 135 H236" marker-end="url(#a6k)"/>
+        <path class="ln" d="M186 154 H210 V223 H236" marker-end="url(#a6)"/>
+        <rect class="box key" x="520" y="96" width="160" height="78" rx="10"/><text class="t" x="534" y="122">server.py</text><text class="s" x="534" y="140">checks login,</text><text class="s" x="534" y="154">revision, sizes</text>
+        <path class="ln key" d="M440 128 H516" marker-end="url(#a6k)"/><text class="lbl" x="448" y="120">POST /api/sync</text>
+        <path class="ln" d="M440 223 H480 V160 H516" marker-end="url(#a6)"/><text class="lbl" x="448" y="250">POST /api/telemetry</text><text class="lbl" x="448" y="263">≤ 100 per batch · 5 s</text>
+        <path class="ln dash" d="M516 108 H480 V60 H444" marker-end="url(#a6)"/><text class="lbl" x="452" y="54">409 → reload</text>
+        <rect class="group" x="730" y="20" width="156" height="234" rx="12"/><text class="h" x="744" y="44">SQLITE</text>
+        <text class="t" x="744" y="74">profiles</text><text class="t" x="744" y="104">records</text><text class="t" x="744" y="134">reports</text><text class="t" x="744" y="164">telemetry_events</text><text class="t" x="744" y="194">metadata</text><text class="s" x="744" y="222">settings, session,</text><text class="s" x="744" y="236">data revision</text>
+        <path class="ln" d="M680 135 H726" marker-end="url(#a6)"/>
+      </svg>
+    </div>
+    <figcaption><strong>Figure 6.</strong> Each sync carries the revision number the browser last saw. If another window saved first, the server answers 409 and the browser reloads the latest data instead of overwriting it.</figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Endpoint</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /api/auth-config</code></td><td>Tells the login screen whether sign-in is required (open to all)</td></tr>
+        <tr><td><code>POST /api/login</code> · <code>/api/logout</code></td><td>Exchanges the operator password for a session token (valid 8 hours) and ends it</td></tr>
+        <tr><td><code>GET /api/bootstrap</code></td><td>Returns settings, profiles, records, reports, session, per-patient face summaries, and the data revision</td></tr>
+        <tr><td><code>POST /api/sync</code></td><td>Saves the full working state if the revision matches</td></tr>
+        <tr><td><code>POST /api/telemetry</code></td><td>Stores batches of history samples and records</td></tr>
+        <tr><td><code>POST /api/profiles/create</code> · <code>/update</code> · <code>/delete</code></td><td>Patient management; names are unique regardless of letter case</td></tr>
+        <tr><td><code>GET /api/health</code></td><td>Database table and row counts</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="two-col">
+    <div class="panel"><h3>Access control</h3><ul>
+      <li>Secure mode: the operator sets a password when starting the server; any operator ID plus that password signs in.</li>
+      <li>The token is kept only in the current browser tab and sent with every API call.</li>
+      <li>After 5 failed sign-ins within 60 s an address is blocked briefly; at most 32 sessions are kept.</li>
+      <li>Requests must come from the same site that served the page, and request bodies are limited to 1 MB.</li>
+      <li>Local test mode skips sign-in but only accepts connections from the same computer.</li>
+    </ul></div>
+    <div class="panel"><h3>Starting the system</h3><ul>
+      <li><code>start_server.bat</code> checks for Python 3.10+, asks whether to use local test mode, and prompts for the operator password.</li>
+      <li><code>server.py</code> copies the dashboard files into <code>public/</code>, prepares the database, and prints the address to open, for example <code>http://localhost:8000</code>.</li>
+      <li>Stored readings older than 30 days are removed at startup.</li>
+    </ul></div>
+  </div>
+  <details class="impl"><summary>Implemented in</summary><div>
+    <ul>
+      <li><code>main_backend.js</code>: <code>login</code>, <code>hydrate</code>, <code>sync</code>, <code>syncNow</code>, <code>persistTelemetry</code>, <code>flushTelemetry</code>, <code>createProfile</code>, <code>updateProfile</code>, <code>deleteProfile</code></li>
+      <li><code>server.py</code>: <code>init_db</code>, <code>build_bootstrap_payload</code>, <code>build_face_summaries</code>, <code>_store_sync</code>, <code>_store_telemetry</code>, <code>_validate_host_origin</code>, <code>prepare_public_assets</code></li>
+      <li><code>start_server.bat</code>, <code>start_server.sh</code>, <code>.env.example</code></li>
+    </ul>
+  </div></details>
+</section>
+
+<!-- 11 UI -->
+<section id="ui">
+  <div class="sec-head"><span class="sec-num">11</span><h2>User interface map</h2></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Page</th><th>What it shows</th><th>Pipeline stage</th></tr></thead>
+      <tbody>
+        <tr><td>Dashboard</td><td>Baseline summary; camera preview with landmarks; patient picker, Manage patients, Capture baseline; Load Models, Start Camera, Stop; fatigue, wrinkle, eyebag; four rolling sensor charts with level badges; Threshold and LSTM 60 s badges; emotion trend chart</td><td>Sections 03–09</td></tr>
+        <tr><td>Patient Profiles</td><td>Directory of patients; profile window with tabs, baseline values, records, reports, CSV download</td><td>Section 09</td></tr>
+        <tr><td>Live Monitoring Hub</td><td>Integrated level, face confidence, temporal stability, sensor sync (n of 4); live feed; emotion probability bars; normal baseline record and comparison; biometric timeline; detection and capture settings</td><td>Sections 04, 07, 09</td></tr>
+        <tr><td>Sensors</td><td>Connection status of each sensor; Wi-Fi and Bluetooth settings; connect and disconnect buttons; packet format; last packet received</td><td>Sections 02–03</td></tr>
+        <tr><td>Status Summary</td><td>Current level with narrative; Integrated score; dominant emotion; sensor evidence; threshold level; LSTM trend; fatigue cues; interpretation guide</td><td>Sections 06–08</td></tr>
+        <tr><td>Mental Health Info</td><td>Research objective, hardware, thresholds, team, validation approach (PHQ-9), ethics</td><td>Context</td></tr>
+        <tr><td>Reports</td><td>Report table; Export CSV, Save PDF, Clear Records; captured data inputs and record details</td><td>Section 09</td></tr>
+        <tr><td>Settings</td><td>Theme and appearance; camera source and facing; detection interval, detector size, profile, model source, smoothing; observation window, first reading delay, history sampling; auto-capture and demo sensors; system information</td><td>All</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 12 SEQUENCE -->
+<section id="sequence">
+  <div class="sec-head"><span class="sec-num">12</span><h2>One session, start to end</h2></div>
+  <ol class="timeline">
+    <li><span class="actor">Operator · server</span><p>Runs <code>start_server.bat</code>, sets the operator password, and opens the printed address. The server prepares the database and serves the dashboard.</p></li>
+    <li><span class="actor">Dashboard · server</span><p>The operator signs in; the dashboard loads all saved data from <code>/api/bootstrap</code> and the LSTM worker loads its model.</p></li>
+    <li><span class="actor">Operator</span><p>Selects or adds the participant on the Dashboard and fits the device.</p></li>
+    <li><span class="actor">ESP32 · dashboard</span><p>Sensors connect over Wi-Fi, Bluetooth, or USB. Packets arrive every 500 ms and are validated; sensor cards turn Connected.</p></li>
+    <li><span class="actor">Dashboard</span><p>Load Models and Start Camera: the face CNNs load and the detection loop begins (every 160 ms by default).</p></li>
+    <li><span class="actor">Operator · dashboard</span><p>Capture baseline: for the observation window the system collects the participant's resting values, then stores their averages on the profile.</p></li>
+    <li><span class="actor">Dashboard</span><p>Each packet and each detection tick recomputes the threshold level and the Integrated score, adds a history sample, and updates the charts.</p></li>
+    <li><span class="actor">LSTM worker</span><p>After 60 s of complete readings the LSTM reports the sustained level every 5 s.</p></li>
+    <li><span class="actor">Dashboard · server</span><p>Records are auto-captured and queued; sync and telemetry batches save everything to SQLite.</p></li>
+    <li><span class="actor">Operator</span><p>Reviews the Status Summary and the profile, then exports CSV or a PDF report. A qualified reviewer makes the final interpretation.</p></li>
+  </ol>
+</section>
+
+<!-- 13 INVENTORY -->
+<section id="inventory">
+  <div class="sec-head"><span class="sec-num">13</span><h2>Files and models</h2></div>
+  <h3>Models</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Model</th><th>Input</th><th>Output</th><th>Runs in</th><th>Files</th></tr></thead>
+      <tbody>
+        <tr><td>SSD MobileNet V1</td><td>Video frame</td><td>Face box + score</td><td>Browser (face-api.js)</td><td><code>models/ssd_mobilenetv1_model-*</code></td></tr>
+        <tr><td>Tiny Face Detector</td><td>Frame at 320–512 px</td><td>Face box + score</td><td>Browser (face-api.js)</td><td><code>models/tiny_face_detector_model-*</code></td></tr>
+        <tr><td>Face Landmark 68 Net</td><td>Face crop</td><td>68 (x, y) points</td><td>Browser (face-api.js)</td><td><code>models/face_landmark_68_model-*</code></td></tr>
+        <tr><td>Face Expression Net</td><td>Aligned face</td><td>7 emotion probabilities</td><td>Browser (face-api.js)</td><td><code>models/face_expression_model-*</code></td></tr>
+        <tr><td>Visual fatigue estimator</td><td>Frame + landmarks</td><td>Eyebag, wrinkle, fatigue 0–100</td><td>Browser (rule-based image analysis)</td><td><code>main.js</code></td></tr>
+        <tr><td>Threshold classifier</td><td>HR, GSR, temperature drop, motion</td><td>Level per sensor + vote</td><td>Browser</td><td><code>project_config.js</code>, <code>main.js</code></td></tr>
+        <tr><td>Integrated score</td><td>Emotion, fatigue, sensor risks</td><td>Score 0–100 + level</td><td>Browser</td><td><code>main.js</code></td></tr>
+        <tr><td>Sensor LSTM</td><td>60 × 4 sequence at 1 Hz</td><td>4 level probabilities</td><td>Browser worker (TensorFlow.js 4.22)</td><td><code>tfjs_lstm_model/</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>Project files</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>File or folder</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td><code>index.html</code></td><td>Page structure: login screen, sidebar, all pages and dialogs</td></tr>
+        <tr><td><code>styles.css</code></td><td>Visual design, nine color themes, light and dark modes, layouts for every screen size</td></tr>
+        <tr><td><code>project_config.js</code></td><td>Single source of thresholds, fusion weights, timings, hardware settings, and project details</td></tr>
+        <tr><td><code>main.js</code></td><td>Core state, charts, classification, Integrated score, visual fatigue, baseline, serial, exports</td></tr>
+        <tr><td><code>main_extension.js</code></td><td>Patients, records and reports, face detection loop, Bluetooth and Wi-Fi, packet handling, settings, startup</td></tr>
+        <tr><td><code>main_backend.js</code></td><td>Sign-in, loading saved data, sync, telemetry queue</td></tr>
+        <tr><td><code>lstm_predictor.js</code> · <code>lstm_worker.js</code></td><td>LSTM input preparation (page) and inference (background worker)</td></tr>
+        <tr><td><code>vendor/tf.min.js</code></td><td>Local copy of TensorFlow.js 4.22 for the LSTM worker</td></tr>
+        <tr><td><code>tfjs_lstm_model/</code> · <code>lstm_norm_params.json</code> · <code>label_map.json</code></td><td>LSTM weights, normalisation values, class order</td></tr>
+        <tr><td><code>models/</code></td><td>face-api.js model weights; also holds an exported emotion model (<code>.tflite</code>) and a face recognition model that the dashboard does not load</td></tr>
+        <tr><td><code>server.py</code></td><td>Local web server, API, sign-in, SQLite storage</td></tr>
+        <tr><td><code>start_server.bat</code> · <code>start_server.sh</code></td><td>Start-up scripts for Windows and Linux</td></tr>
+        <tr><td><code>public/</code></td><td>Copy of the dashboard files served to the browser, refreshed at every server start</td></tr>
+        <tr><td><code>data/</code></td><td><code>dashboard.sqlite3</code> (live database), backups, and <code>create_database.py</code> (builds a separate sample database)</td></tr>
+        <tr><td><code>ESP32/ESP32_81porsyento/</code></td><td>Device firmware (USB, Bluetooth and Wi-Fi)</td></tr>
+        <tr><td><code>ESP32/test_4sensors/</code> · <code>ESP32_81porsyento.ino</code></td><td>Four-sensor bench test, and an earlier Wi-Fi-only firmware version</td></tr>
+        <tr><td><code>sensor_examples/</code></td><td>Example packets and an Arduino serial example</td></tr>
+        <tr><td><code>train_lstm.py</code> · <code>train_lstm_synthetic.py</code> · <code>lstm_tfjs_export.py</code></td><td>LSTM training on participant data, synthetic bootstrap training, browser export</td></tr>
+        <tr><td><code>prepare_lstm_data.py</code> · <code>convert_model*.bat</code></td><td>Earlier data preparation and conversion helpers</td></tr>
+        <tr><td><code>lstm_model_files/</code></td><td>Previous model backup and the browser/Keras consistency check vectors</td></tr>
+        <tr><td><code>cnn-lstm-mental-health-records.csv</code></td><td>Records exported from earlier sessions</td></tr>
+        <tr><td><code>check_db.py</code></td><td>Prints database tables and row counts</td></tr>
+        <tr><td><code>docs/</code></td><td>Notes, run instructions, design specification, model and dataset references, baseline exports</td></tr>
+        <tr><td><code>assets/logo.png</code></td><td>Application logo</td></tr>
+        <tr><td><code>requirements.txt</code></td><td>Python packages for model training and export</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+</main>
+
+<footer>PsycheScan is a screening and decision-support tool for participants aged 18–65 who have given informed consent. Results are benchmarked against PHQ-9 and do not replace assessment by a qualified professional. Data stays on the local machine in line with RA 10173 (Data Privacy Act of 2012).</footer>
+</div>
+
+</body></html>
