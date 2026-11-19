@@ -201,5 +201,7 @@ Edit the files in the project root, not in `public/`. The server copies the root
 ## Team
 
 Ageas, Axel B. · Carreon, Jannah Leigh M. · Esplana, Gerald C. · Ruina, Shane R.
+
 Adviser: Engr. Ricrey E. Marquez, PCpE
+
 Creator: Esplana, Gerald C.
