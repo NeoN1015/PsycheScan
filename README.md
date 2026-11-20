@@ -14,8 +14,8 @@ The dashboard combines both streams into one Integrated score on a four-level sc
 
 
 ## Live Demos of Architecture
-- 📄 [Defense Report](https://YOURNAME.github.io/psychescan/PsycheScan_Defense_Report.html)
-- 🗺️ [System Map](https://YOURNAME.github.io/psychescan/PsycheScan_System_Map.html)
+- 📄 [Defense Report](https://neon1015.github.io/PsycheScan/PsycheScan_Defense_Report.html)
+- 🗺️ [System Map](https://neon1015.github.io/PsycheScan/PsycheScan_System_Map.html)
 
 > Screening and decision support only. PsycheScan is not a clinical diagnosis tool. Final interpretation must involve a qualified professional.
 
