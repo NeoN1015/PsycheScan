@@ -12,6 +12,11 @@ PsycheScan screens a participant for stress and anxiety by combining two evidenc
 
 The dashboard combines both streams into one Integrated score on a four-level scale: **Minimal, Mild, Moderate, Severe**. An LSTM network reports the sustained trend of the vital signs over the last minute. Everything runs locally on one computer; no cloud service is needed.
 
+
+## Live Demos of Architecture
+- 📄 [Defense Report](https://YOURNAME.github.io/psychescan/PsycheScan_Defense_Report.html)
+- 🗺️ [System Map](https://YOURNAME.github.io/psychescan/PsycheScan_System_Map.html)
+
 > Screening and decision support only. PsycheScan is not a clinical diagnosis tool. Final interpretation must involve a qualified professional.
 
 For a full explanation of how every part works, with diagrams, see [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md).
