@@ -1,0 +1,5 @@
+__pycache__/
+*.py[cod]
+data/dashboard.sqlite3
+data/dashboard.sqlite3-shm
+data/dashboard.sqlite3-wal

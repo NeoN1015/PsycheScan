@@ -1,0 +1,25 @@
+{
+  "mean": [
+    87.92510223388672,
+    2.157179594039917,
+    33.05327224731445,
+    0.11004756391048431
+  ],
+  "std": [
+    18.600910186767578,
+    1.928739070892334,
+    1.479251742362976,
+    0.11942601948976517
+  ],
+  "features": [
+    "hr",
+    "gsr",
+    "temp",
+    "motion"
+  ],
+  "sequenceLength": 60,
+  "sampleRateHz": 1,
+  "trainingData": "synthetic",
+  "note": "Bootstrap model trained on synthetic sequences labelled by the Table 1 thresholds; not clinically validated. Replace by training on real labelled sessions.",
+  "syntheticTestAccuracy": 0.9131
+}
