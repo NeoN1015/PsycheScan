@@ -4,5 +4,5 @@ import react from "@vitejs/plugin-react";
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: "/psychescan-collect/", // must match the repo name
+  base: "/PsycheScan/", // must match the GitHub repo name (case-sensitive)
 });

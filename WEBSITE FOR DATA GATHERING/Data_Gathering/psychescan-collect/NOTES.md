@@ -37,6 +37,12 @@ Rest, stress and recovery are **60 s each** (`CONFIG.phases`), not the 180 s of 
 - **Stress task:** still adaptive and timed exactly as in §7 (4.0 s start, 2.5–4.0 s limits, harder after 3 correct, easier after 2 wrong), just for 60 s.
 - **Rows per session:** about 60 rest, 60 stress and 60 recovery rows (plus calibration and checkpoint rows). The `_session.csv` columns are the same.
 
+## Hosting on GitHub Pages (22 Nov 2026)
+
+- The code is in `NeoN1015/PsycheScan`, branch `Defense`, three folders deep. The site will be at `https://neon1015.github.io/PsycheScan/`, so `vite.config.js` now uses `base: "/PsycheScan/"` instead of `"/psychescan-collect/"`.
+- The deploy workflow must be at the repository root (`.github/workflows/deploy.yml`), trigger on `Defense`, and build in the app folder. The copy inside this folder is not run by GitHub. The root file is outside this folder, so the user adds it.
+- localStorage and IndexedDB keys keep the `psychescan-collect` prefix. They are storage names, not URLs, and changing them would hide saved sessions.
+
 ## Setup and dependencies
 
 - **React 18.** `npm create vite@latest` now installs React 19; it was pinned back to 18.3 to match §2.
