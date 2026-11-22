@@ -22,6 +22,12 @@ jobs:
           cache-dependency-path: "WEBSITE FOR DATA GATHERING/Data_Gathering/psychescan-collect/package-lock.json"
       - run: npm ci
       - run: npm run build
+      # The official PsycheScan dashboard (static files, no build) is published at /PsycheScan/official/
+      - name: Add the official website
+        run: |
+          mkdir -p dist/official
+          cp -r "../../../OFFICIAL WEBSITE/site/." dist/official/
+          test -f dist/official/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: "WEBSITE FOR DATA GATHERING/Data_Gathering/psychescan-collect/dist"

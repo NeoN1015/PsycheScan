@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PsycheScan — Real-Time Early Detection System for Mental Health</title>
+  <link rel="icon" type="image/png" href="./assets/logo.png" />
+  <link rel="stylesheet" href="./styles.css" />
+
+  <script defer src="./vendor/face-api.min.js"></script>
+  <script defer src="./vendor/chart.umd.js"></script>
+  <script defer src="./vendor/lucide.min.js"></script>
+  <script defer src="./js/config.js"></script>
+  <script defer src="./js/util.js"></script>
+  <script defer src="./js/state.js"></script>
+  <script defer src="./js/sensors.js"></script>
+  <script defer src="./js/camera.js"></script>
+  <script defer src="./js/charts.js"></script>
+  <script defer src="./js/lstm.js"></script>
+  <script defer src="./js/baseline.js"></script>
+  <script defer src="./js/profiles.js"></script>
+  <script defer src="./js/records.js"></script>
+  <script defer src="./js/app.js"></script>
+</head>
+<body data-theme="royal-violet" data-appearance="light">
+  <div class="bg-orbs">
+    <span class="orb orb-1"></span>
+    <span class="orb orb-2"></span>
+    <span class="orb orb-3"></span>
+    <span class="orb orb-4"></span>
+  </div>
+
+  <div class="disconnect-banner" id="disconnectBanner" role="alert" hidden>
+    <i data-lucide="unplug"></i>
+    <strong>Sensor disconnected</strong>
+    <span id="disconnectBannerText">The USB connection to the ESP32 was lost.</span>
+    <button class="action-btn compact" id="reconnectSerialBtn" type="button"><i data-lucide="refresh-cw"></i><span>Reconnect</span></button>
+  </div>
+
+  <div class="app-shell">
+    <aside class="sidebar panel">
+      <div class="brand">
+        <img class="brand-logo" src="./assets/logo.png" alt="" />
+        <div>
+          <h1>PsycheScan</h1>
+          <p>Stress &amp; Anxiety Early Detection</p>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav" id="sidebarNav">
+        <button class="nav-item active" data-page="dashboard"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></button>
+        <button class="nav-item" data-page="profiles"><i data-lucide="contact-round"></i><span>Patient Profiles</span></button>
+        <button class="nav-item" data-page="live"><i data-lucide="radio-tower"></i><span>Live Monitoring Hub</span></button>
+        <button class="nav-item" data-page="sensors"><i data-lucide="cpu"></i><span>Sensors</span></button>
+        <button class="nav-item" data-page="summary"><i data-lucide="file-heart"></i><span>Status Summary</span></button>
+        <button class="nav-item" data-page="reports"><i data-lucide="file-text"></i><span>Reports</span></button>
+        <button class="nav-item" data-page="settings"><i data-lucide="settings-2"></i><span>Settings</span></button>
+      </nav>
+    </aside>
+
+    <main class="main-panel">
+      <header class="topbar panel">
+        <div>
+          <h2 id="pageTitle">Dashboard</h2>
+          <p id="pageSubtitle">Live camera feed and vital signs for stress and anxiety screening</p>
+        </div>
+
+        <div class="topbar-right">
+          <div class="pill" id="clockPill">Loading...</div>
+          <div class="status-indicator-pill" title="System status">
+            <span class="status-dot pulsing" id="systemStatusDot"></span>
+            <span id="systemStatus">Ready</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="page-section active-section" id="dashboardPage">
+        <section class="card panel dashboard-baseline-card" aria-label="Patient baseline summary">
+          <div class="dashboard-baseline-heading">
+            <div>
+              <h3>Baseline Summary</h3>
+              <p class="subtext" id="dashboardBaselineCaption">Select a patient, calibrate, then capture a baseline.</p>
+            </div>
+            <div class="dashboard-baseline-actions">
+              <span class="status-badge muted" id="dashboardBaselineStatus">Not recorded</span>
+              <button class="action-btn secondary compact baseline-toggle-btn" id="toggleBaselineCardBtn" type="button" title="Hide or show the baseline summary">
+                <i data-lucide="chevron-up" id="baselineToggleIcon"></i><span id="baselineToggleText">Hide Baseline</span>
+              </button>
+            </div>
+          </div>
+          <div class="dashboard-baseline-content">
+            <section class="baseline-summary-group" aria-label="Average baseline sensor readings">
+              <h4>Sensor baseline averages</h4>
+              <div class="baseline-summary-grid baseline-summary-sensors">
+                <div class="baseline-summary-stat"><span>Heart rate</span><strong id="dashboardBaselineHr">--</strong></div>
+                <div class="baseline-summary-stat"><span>GSR / EDA</span><strong id="dashboardBaselineGsr">--</strong></div>
+                <div class="baseline-summary-stat"><span>Temperature</span><strong id="dashboardBaselineTemp">--</strong></div>
+                <div class="baseline-summary-stat"><span>Motion</span><strong id="dashboardBaselineMotion">--</strong></div>
+              </div>
+            </section>
+            <section class="baseline-summary-group" aria-label="Face and fatigue readings">
+              <h4>Face and fatigue during baseline</h4>
+              <div class="baseline-summary-grid baseline-summary-face">
+                <div class="baseline-summary-stat"><span>Face detected</span><strong id="dashboardBaselineFace">--</strong></div>
+                <div class="baseline-summary-stat"><span>Dominant expression</span><strong id="dashboardBaselineEmotion">--</strong></div>
+                <div class="baseline-summary-stat"><span>Visual fatigue</span><strong id="dashboardBaselineFatigue">--</strong></div>
+                <div class="baseline-summary-stat"><span>Wrinkle score</span><strong id="dashboardBaselineWrinkle">--</strong></div>
+                <div class="baseline-summary-stat"><span>Eyebag score</span><strong id="dashboardBaselineEyebag">--</strong></div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <div class="grid-2 dashboard-reading-grid">
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>Camera Preview</h3>
+              <span class="status-badge muted" id="cameraBadge">READY</span>
+            </div>
+            <div class="camera-shell">
+              <video id="video" class="camera-video mirrored" width="640" height="480" autoplay muted playsinline></video>
+              <canvas id="overlay" class="camera-overlay mirrored"></canvas>
+              <div class="camera-top">
+                <span class="camera-chip" id="faceCountText">0 face</span>
+                <span class="camera-chip" id="cameraTime">--:--:--</span>
+              </div>
+              <div class="camera-bottom">
+                <span id="dominantEmotion">No Face</span>
+                <span id="dominantConfidence">0%</span>
+              </div>
+            </div>
+
+            <div class="baseline-capture-controls">
+              <label class="setting-row profile-picker">
+                <span>Active patient</span>
+                <select id="activeProfileSelect" aria-label="Active patient profile">
+                  <option value="">Select a patient</option>
+                </select>
+              </label>
+              <button class="action-btn secondary" id="openPatientManagementBtn" type="button" aria-haspopup="dialog" aria-controls="patientManagementModal">
+                <i data-lucide="users-round"></i><span>Manage patients</span>
+              </button>
+              <button class="action-btn" id="calibrateBtn" type="button" aria-haspopup="dialog" aria-controls="calibrationModal">
+                <i data-lucide="gauge"></i><span>Calibrate</span>
+              </button>
+              <button class="action-btn" id="captureBaselineBtn" type="button" disabled>
+                <i data-lucide="scan-heart"></i><span id="baselineCaptureButtonLabel">Capture baseline</span>
+              </button>
+              <span class="baseline-capture-progress" id="baselineCaptureProgress" aria-live="polite">Calibrate first to enable baseline capture.</span>
+            </div>
+
+            <div class="button-row">
+              <button class="action-btn" id="loadModelsBtn"><i data-lucide="database-zap"></i>Load Models</button>
+              <button class="action-btn" id="startCameraBtn"><i data-lucide="play"></i>Start Camera</button>
+              <button class="action-btn secondary" id="stopCameraBtn"><i data-lucide="square"></i>Stop</button>
+            </div>
+            <div class="dashboard-fatigue-grid">
+              <div class="mini-stat"><span>Visual Fatigue</span><strong id="dashboardFatigueScore">0%</strong></div>
+              <div class="mini-stat"><span>Wrinkle Score</span><strong id="dashboardWrinkleScore">0%</strong></div>
+              <div class="mini-stat"><span>Eyebag Score</span><strong id="dashboardEyebagScore">0%</strong></div>
+            </div>
+          </div>
+
+          <div class="card panel dashboard-patient-card">
+            <div class="card-title-row">
+              <div><h3>Patient Biometrics</h3><p class="subtext">Live readings and change from the patient's baseline.</p></div>
+              <div class="button-row dashboard-reading-actions">
+                <span class="status-badge muted" id="dashboardLstmBadge" title="LSTM model result">LSTM: --</span>
+                <button class="action-btn secondary" id="clearReadingsBtn" type="button" title="Clear the live charts; saved patient records stay">
+                  <i data-lucide="eraser"></i><span>Clear readings</span>
+                </button>
+              </div>
+            </div>
+            <div class="sensor-chart-grid">
+              <div class="sensor-chart-card"><div class="card-title-row"><h4>Heart Rate</h4><span>bpm</span></div><div class="chart-wrap sensor-chart"><canvas id="sensorHrChart"></canvas></div><div class="sensor-status-row"><span class="sensor-current-value" id="dashboardHrValue">--</span><span class="change-indicator" id="dashboardHrChange">No baseline</span></div></div>
+              <div class="sensor-chart-card"><div class="card-title-row"><h4>GSR / EDA</h4><span>µS</span></div><div class="chart-wrap sensor-chart"><canvas id="sensorGsrChart"></canvas></div><div class="sensor-status-row"><span class="sensor-current-value" id="dashboardGsrValue">--</span><span class="change-indicator" id="dashboardGsrChange">No baseline</span></div></div>
+              <div class="sensor-chart-card"><div class="card-title-row"><h4>Temperature</h4><span>°C</span></div><div class="chart-wrap sensor-chart"><canvas id="sensorTempChart"></canvas></div><div class="sensor-status-row"><span class="sensor-current-value" id="dashboardTempValue">--</span><span class="change-indicator" id="dashboardTempChange">No baseline</span></div></div>
+              <div class="sensor-chart-card"><div class="card-title-row"><h4>Motion</h4><span>g</span></div><div class="chart-wrap sensor-chart"><canvas id="sensorMotionChart"></canvas></div><div class="sensor-status-row"><span class="sensor-current-value" id="dashboardMotionValue">--</span></div></div>
+            </div>
+            <div class="dashboard-emotion-block">
+              <div class="card-title-row"><h3>Emotion</h3><span class="status-badge muted" id="dashboardEmotionBadge">NO FACE</span></div>
+              <div class="chart-wrap emotion-chart">
+                <canvas id="emotionChart"></canvas>
+                <div class="emotion-empty-state" id="emotionChartEmptyState" role="status">Start the camera to display emotion trends.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page-section" id="livePage">
+        <div class="card panel session-configuration-panel">
+          <div class="card-title-row">
+            <div>
+              <h3>Session Status</h3>
+              <p class="subtext">Face, sensor, calibration and LSTM readiness.</p>
+            </div>
+          </div>
+          <div class="metrics-grid">
+            <div class="metric-card panel">
+              <div class="metric-head"><span class="metric-icon"><i data-lucide="badge-percent"></i></span><span class="metric-label">Face Confidence</span></div>
+              <div class="metric-value" id="metricFace">0%</div>
+              <div class="metric-note">Dominant face expression</div>
+            </div>
+            <div class="metric-card panel">
+              <div class="metric-head"><span class="metric-icon"><i data-lucide="heart-pulse"></i></span><span class="metric-label">Sensor Sync</span></div>
+              <div class="metric-value" id="metricSync">0 / 4</div>
+              <div class="metric-note">Sensors sending valid data</div>
+            </div>
+            <div class="metric-card panel">
+              <div class="metric-head"><span class="metric-icon"><i data-lucide="gauge"></i></span><span class="metric-label">Calibration</span></div>
+              <div class="metric-value" id="metricCalibration">Not done</div>
+              <div class="metric-note" id="metricBaselineNote">Baseline not recorded</div>
+            </div>
+            <div class="metric-card panel">
+              <div class="metric-head"><span class="metric-icon"><i data-lucide="brain-circuit"></i></span><span class="metric-label">LSTM</span></div>
+              <div class="metric-value" id="metricLstm">--</div>
+              <div class="metric-note" id="metricLstmNote">LSTM model not loaded</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>Live Monitoring Feed</h3>
+              <span class="status-badge muted" id="liveStatusBadge">IDLE</span>
+            </div>
+
+            <div class="camera-shell live-shell">
+              <video id="liveVideo" class="camera-video mirrored" width="640" height="480" autoplay muted playsinline></video>
+              <canvas id="liveOverlay" class="camera-overlay mirrored"></canvas>
+            </div>
+
+            <div class="mini-stat-grid">
+              <div class="mini-stat"><span>Heart Rate</span><strong id="liveHr">--</strong></div>
+              <div class="mini-stat"><span>GSR</span><strong id="liveGsr">--</strong></div>
+              <div class="mini-stat"><span>Temperature</span><strong id="liveTemp">--</strong></div>
+              <div class="mini-stat"><span>Motion</span><strong id="liveMotion">--</strong></div>
+            </div>
+
+            <div class="mini-stat-grid">
+              <div class="mini-stat"><span>Eyebag Score</span><strong id="eyebagScore">0%</strong></div>
+              <div class="mini-stat"><span>Wrinkle Score</span><strong id="wrinkleScore">0%</strong></div>
+              <div class="mini-stat"><span>Visual Fatigue</span><strong id="fatigueScore">0%</strong></div>
+              <div class="mini-stat"><span>Records saved</span><strong id="liveRecordCount">0</strong></div>
+            </div>
+          </div>
+
+          <div class="live-right-stack">
+            <div class="card panel">
+              <div class="card-title-row">
+                <h3>Emotion Probability</h3>
+                <span class="status-badge muted">LIVE</span>
+              </div>
+              <div class="prob-list" id="probabilityList"></div>
+            </div>
+
+            <div class="card panel baseline-record-card">
+              <div class="card-title-row">
+                <div><h3>Normal Baseline Record</h3><p class="subtext">Average vital signs from the timed capture.</p></div>
+                <span class="status-badge muted" id="baselineStatusBadge">READY</span>
+              </div>
+              <p class="subtext baseline-record-status" id="baselineStatusText">Calibrate, then capture a baseline from the Dashboard.</p>
+              <div class="baseline-values">
+                <div class="mini-stat"><span>Heart rate</span><strong id="baselineHrValue">--</strong></div>
+                <div class="mini-stat"><span>GSR / EDA</span><strong id="baselineGsrValue">--</strong></div>
+                <div class="mini-stat"><span>Temperature</span><strong id="baselineTempValue">--</strong></div>
+                <div class="mini-stat"><span>Motion</span><strong id="baselineMotionValue">--</strong></div>
+              </div>
+              <p class="baseline-comparison" id="baselineComparisonText">No baseline recorded for this patient.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card panel">
+          <div class="card-title-row">
+            <h3>Vital Signs Timeline</h3>
+          </div>
+          <div class="chart-wrap large"><canvas id="liveChart"></canvas></div>
+        </div>
+
+        <div class="live-hub-grid">
+          <div class="card panel">
+            <div class="card-title-row"><h3>Detection</h3><span class="status-badge muted">CAMERA</span></div>
+            <div class="dashboard-setting-controls">
+              <label class="setting-row compact-setting"><span>Detection interval</span><select data-setting="detectionInterval"><option value="120">Fast · 120 ms</option><option value="160">Balanced · 160 ms</option><option value="220">Stable · 220 ms</option></select></label>
+              <label class="setting-row compact-setting"><span>Detector size</span><select data-setting="detectorInputSize"><option value="320">320</option><option value="416">416</option><option value="512">512</option></select></label>
+              <label class="setting-row compact-setting"><span>Detection profile</span><select data-setting="detectionProfile"><option value="standard">Standard</option><option value="strong">Strong</option><option value="phone-strong">External Cam Strong</option></select></label>
+              <label class="setting-row compact-setting"><span>Emotion smoothing</span><select data-setting="smoothingFactor"><option value="0.25">Low</option><option value="0.4">Balanced</option><option value="0.6">Strong</option></select></label>
+            </div>
+          </div>
+          <div class="card panel">
+            <div class="card-title-row"><h3>Capture</h3><span class="status-badge muted">SESSION</span></div>
+            <div class="dashboard-setting-controls">
+              <label class="setting-row compact-setting"><span>Baseline duration</span><select data-setting="observationDurationSec"><option value="180">3 minutes</option><option value="240">4 minutes</option><option value="300">5 minutes</option><option value="custom">Custom</option></select></label>
+              <label class="setting-row compact-setting"><span>First reading delay</span><select data-setting="firstReadingDelaySec"><option value="0">Immediate</option><option value="10">10 seconds</option><option value="30">30 seconds</option><option value="60">60 seconds</option></select></label>
+              <div class="switch-row dashboard-switches"><label class="switch-pill"><input type="checkbox" data-setting="autoCapture" /><span>Auto-capture records</span></label></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page-section" id="sensorsPage">
+        <div class="card panel live-sensor-hub">
+          <div class="card-title-row"><h3>Sensor Connection Hub</h3><span class="status-badge muted" id="serialBadge">DISCONNECTED</span></div>
+          <div class="sensor-grid" id="sensorGrid"></div>
+          <div class="button-row">
+            <button class="action-btn" id="connectSerialBtn"><i data-lucide="plug-zap"></i>Connect USB</button>
+            <button class="action-btn secondary" id="disconnectSerialBtn"><i data-lucide="plug-2"></i>Disconnect</button>
+            <button class="action-btn secondary" id="simulateSensorsBtn" hidden><i data-lucide="flask-conical"></i><span>Simulate sensors</span></button>
+            <button class="action-btn secondary" id="simulateUnplugBtn" hidden><i data-lucide="unplug"></i><span>Simulate unplug</span></button>
+          </div>
+          <p class="subtext" id="serialSupportNote" hidden>USB connection needs desktop Chrome or Edge, opened through https:// or localhost.</p>
+        </div>
+
+        <div class="grid-2">
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>USB Serial Packet</h3>
+            </div>
+            <div class="mini-stat-grid tight-grid">
+              <div class="mini-stat"><span>Connection</span><strong>USB Web Serial · 115200 baud</strong></div>
+              <div class="mini-stat"><span>Rate</span><strong>One JSON line per second</strong></div>
+              <div class="mini-stat"><span>Ignored</span><strong>Lines starting with "#"</strong></div>
+              <div class="mini-stat"><span>Storage</span><strong>This browser only</strong></div>
+            </div>
+            <pre class="code-block">{"hr":78.4,"gsr":2.15,"temp":34.6,"motion":0.042,"dataValid":true,"max30102":true,"gsrConnected":true,"ds18b20":true,"mpu6050":true}</pre>
+            <div class="info-stack compact">
+              <div class="info-block"><span>Last packet time</span><strong id="lastPacketTime">No packet received</strong></div>
+              <div class="info-block"><span>Last raw packet</span><strong id="lastPacketRaw">—</strong></div>
+              <div class="info-block"><span>Packets received / lines ignored</span><strong id="packetCounts">0 / 0</strong></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page-section" id="summaryPage">
+        <div class="grid-2">
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>Participant Status Summary</h3>
+              <span class="status-badge muted" id="summaryStatusBadge">No live data</span>
+            </div>
+
+            <p class="subtext" id="summaryNarrative">Start the camera and/or connect the sensors to see the current readings.</p>
+
+            <div class="info-stack">
+              <div class="info-block"><span>Patient</span><strong id="summaryPatient">None selected</strong></div>
+              <div class="info-block"><span>Dominant emotional state</span><strong id="summaryEmotion">No Face</strong></div>
+              <div class="info-block"><span>Sensors sending data</span><strong id="summarySensors">0 of 4</strong></div>
+              <div class="info-block"><span>Heart rate vs baseline</span><strong id="summaryHrChange">--</strong></div>
+              <div class="info-block"><span>GSR vs baseline</span><strong id="summaryGsrChange">--</strong></div>
+              <div class="info-block"><span>Temperature vs baseline</span><strong id="summaryTempChange">--</strong></div>
+              <div class="info-block"><span>LSTM</span><strong id="summaryLstm">LSTM model not loaded</strong></div>
+              <div class="info-block"><span>Visual fatigue cue</span><strong id="summaryFatigue">0%</strong></div>
+              <div class="info-block"><span>Eyebag indicator</span><strong id="summaryEyebag">0%</strong></div>
+              <div class="info-block"><span>Wrinkle texture</span><strong id="summaryWrinkle">0%</strong></div>
+            </div>
+          </div>
+
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>Reading the indicators</h3>
+            </div>
+            <div class="bullet-card">
+              <h4>Change from baseline</h4>
+              <p>Heart rate and GSR are shown as a percentage above or below the patient's resting baseline. Temperature is shown as the drop (or rise) in °C from the baseline. These are plain measurements, not stress levels.</p>
+            </div>
+            <div class="bullet-card">
+              <h4>LSTM</h4>
+              <p>When a trained model is installed, it reads the last few seconds of vital signs and reports its label with a confidence percentage. It only runs when at least 80% of that window has valid readings.</p>
+            </div>
+            <div class="bullet-card">
+              <h4>Face and fatigue</h4>
+              <p>Expression probabilities and the fatigue, eyebag and wrinkle cues come from the camera. Lighting and camera angle affect them.</p>
+            </div>
+            <p class="subtext top-gap">Decision-support tool only. Not a diagnosis. Does not replace clinical assessment.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="page-section" id="reportsPage">
+        <div class="card panel">
+          <div class="card-title-row">
+            <h3>Reports</h3>
+            <span class="status-badge muted" id="reportCountBadge">0 Records</span>
+          </div>
+
+          <div class="button-row">
+            <button class="action-btn" id="exportCsvBtn"><i data-lucide="download"></i>Export CSV</button>
+            <button class="action-btn" id="savePdfBtn"><i data-lucide="file-down"></i>Save PDF</button>
+            <button class="action-btn secondary" id="clearReportsBtn"><i data-lucide="trash-2"></i>Clear Records</button>
+            <button class="action-btn secondary" id="toggleDataInputsBtn" type="button" aria-haspopup="dialog" aria-controls="reportInputsModal"><i data-lucide="database"></i><span>View Data Inputs</span></button>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Patient</th>
+                  <th>Phase</th>
+                  <th>Emotion</th>
+                  <th>HR Δ</th>
+                  <th>GSR Δ</th>
+                  <th>Temp drop</th>
+                  <th>LSTM</th>
+                </tr>
+              </thead>
+              <tbody id="reportTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="page-section" id="profilesPage">
+        <div class="card panel">
+          <div class="card-title-row">
+            <div><h3>Patient Profiles</h3><p class="subtext">Select a patient to open their baseline and records.</p></div>
+            <span class="status-badge muted" id="activeProfileBadge">NO ACTIVE PROFILE</span>
+          </div>
+          <div class="profile-directory" id="profileDirectory" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="page-section" id="settingsPage">
+        <div class="grid-2">
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>Appearance &amp; Camera</h3>
+            </div>
+
+            <div class="settings-list">
+              <label class="setting-row">
+                <span>Theme</span>
+                <select data-setting="theme">
+                  <option value="royal-violet">Royal Violet</option>
+                  <option value="orchid-glow">Orchid Glow</option>
+                  <option value="midnight-iris">Midnight Iris</option>
+                  <option value="lavender-frost">Lavender Frost</option>
+                  <option value="emerald-aurora">Emerald Aurora</option>
+                  <option value="sunset-flare">Sunset Flare</option>
+                  <option value="cobalt-pulse">Cobalt Pulse</option>
+                  <option value="rose-nebula">Rose Nebula</option>
+                  <option value="amber-cosmos">Amber Cosmos</option>
+                </select>
+              </label>
+
+              <label class="setting-row">
+                <span>Appearance mode</span>
+                <select data-setting="appearance">
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                  <option value="auto">Automatic</option>
+                </select>
+              </label>
+
+              <label class="setting-row">
+                <span>Camera source</span>
+                <select id="cameraDeviceSelect" data-setting="cameraDeviceId">
+                  <option value="auto">Auto / Default camera</option>
+                </select>
+              </label>
+
+              <label class="setting-row">
+                <span>Camera facing mode</span>
+                <select data-setting="cameraFacing">
+                  <option value="auto">Auto</option>
+                  <option value="user">Front / Selfie</option>
+                  <option value="environment">Rear / Environment</option>
+                </select>
+              </label>
+
+              <div class="switch-row">
+                <label class="switch-pill"><input type="checkbox" data-setting="mirrorCamera" /><span>Mirror camera preview</span></label>
+                <label class="switch-pill"><input type="checkbox" data-setting="showLandmarks" /><span>Show landmarks</span></label>
+              </div>
+            </div>
+          </div>
+
+          <div class="card panel">
+            <div class="card-title-row">
+              <h3>Detection &amp; Capture</h3>
+            </div>
+
+            <div class="settings-list">
+              <label class="setting-row">
+                <span>Detection interval</span>
+                <select data-setting="detectionInterval">
+                  <option value="120">Fast · 120 ms</option>
+                  <option value="160">Balanced · 160 ms</option>
+                  <option value="220">Stable · 220 ms</option>
+                </select>
+              </label>
+
+              <label class="setting-row">
+                <span>Baseline duration</span>
+                <select data-setting="observationDurationSec">
+                  <option value="180">3 minutes</option>
+                  <option value="240">4 minutes</option>
+                  <option value="300">5 minutes</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+
+              <label class="setting-row">
+                <span>Custom baseline minutes</span>
+                <input type="number" data-setting="customDurationMin" min="1" max="60" />
+              </label>
+
+              <label class="setting-row">
+                <span>First reading delay</span>
+                <select data-setting="firstReadingDelaySec">
+                  <option value="0">Immediate</option>
+                  <option value="10">10 seconds</option>
+                  <option value="30">30 seconds</option>
+                  <option value="60">60 seconds</option>
+                </select>
+              </label>
+
+              <label class="setting-row">
+                <span>Detector input size</span>
+                <select data-setting="detectorInputSize">
+                  <option value="320">320</option>
+                  <option value="416">416</option>
+                  <option value="512">512</option>
+                </select>
+              </label>
+
+              <label class="setting-row">
+                <span>Detection profile</span>
+                <select data-setting="detectionProfile">
+                  <option value="standard">Standard</option>
+                  <option value="strong">Strong</option>
+                  <option value="phone-strong">Phone / External Cam Strong</option>
+                </select>
+              </label>
+
+              <label class="setting-row">
+                <span>Smoothing factor</span>
+                <select data-setting="smoothingFactor">
+                  <option value="0.25">Low smoothing</option>
+                  <option value="0.4">Balanced smoothing</option>
+                  <option value="0.6">Strong smoothing</option>
+                </select>
+              </label>
+
+              <div class="switch-row">
+                <label class="switch-pill"><input type="checkbox" data-setting="autoCapture" /><span>Auto-capture records</span></label>
+              </div>
+
+              <div class="button-row">
+                <button class="action-btn secondary" id="resetSettingsBtn"><i data-lucide="rotate-ccw"></i>Reset to defaults</button>
+              </div>
+              <p class="subtext">Settings are saved automatically in this browser.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card panel">
+          <div class="card-title-row">
+            <h3>System Information</h3>
+          </div>
+          <div class="info-stack compact">
+            <div class="info-block"><span>Face models</span><strong id="modelStatusText">Not loaded</strong></div>
+            <div class="info-block"><span>Camera</span><strong id="cameraStatusText">Inactive</strong></div>
+            <div class="info-block"><span>USB serial</span><strong id="serialStatusText">Disconnected</strong></div>
+            <div class="info-block"><span>LSTM model</span><strong id="lstmStatusText">LSTM model not loaded</strong></div>
+            <div class="info-block"><span>Storage</span><strong id="storageStatusText">0 records</strong></div>
+          </div>
+        </div>
+        <details class="bullet-card project-details">
+          <summary>Project and storage details</summary>
+          <div class="project-details-content">
+            <strong>CpE — COEN3133 Capstone · Colegio de Muntinlupa</strong>
+            <p>ESP32 sensors over USB · USB webcam · Participants aged 18–65</p>
+            <h4>Where data is stored</h4>
+            <p>Patients, baselines and records are kept in this browser's local storage on this computer. Nothing is uploaded. Export a CSV to keep a copy.</p>
+          </div>
+        </details>
+      </section>
+    </main>
+  </div>
+
+  <footer class="app-footer" role="contentinfo">
+    Decision-support tool only. Not a diagnosis. Does not replace clinical assessment.
+  </footer>
+
+  <div class="modal-backdrop" id="calibrationModal" role="dialog" aria-modal="true" aria-labelledby="calibrationTitle" aria-hidden="true">
+    <div class="modal-card panel calibration-modal">
+      <div class="card-title-row">
+        <div><h3 id="calibrationTitle">Sensor calibration</h3><p class="subtext" id="calibrationSubtitle">Keep the participant seated and still with all sensors attached.</p></div>
+        <button class="icon-btn" id="closeCalibrationBtn" type="button" title="Close calibration" aria-label="Close calibration"><i data-lucide="x"></i></button>
+      </div>
+      <div class="calibration-head">
+        <div class="calibration-countdown" id="calibrationCountdown" aria-live="polite">01:00</div>
+        <div class="calibration-verdict" id="calibrationVerdict">Waiting for readings…</div>
+      </div>
+      <div class="calibration-values">
+        <div class="mini-stat"><span>Heart rate</span><strong id="calHr">--</strong></div>
+        <div class="mini-stat"><span>GSR / EDA</span><strong id="calGsr">--</strong></div>
+        <div class="mini-stat"><span>Temperature</span><strong id="calTemp">--</strong></div>
+        <div class="mini-stat"><span>Motion</span><strong id="calMotion">--</strong></div>
+      </div>
+      <ul class="calibration-checks" aria-label="Stability checks over the last 20 seconds">
+        <li id="calCheckTemp"><span>Temperature range ≤ 0.2 °C</span><strong>--</strong></li>
+        <li id="calCheckGsr"><span>GSR range ≤ 10% of mean</span><strong>--</strong></li>
+        <li id="calCheckHr"><span>Heart-rate SD ≤ 5 bpm</span><strong>--</strong></li>
+      </ul>
+      <p class="subtext" id="calibrationHint">Calibration runs for at least 1 minute and stops after 3 minutes.</p>
+      <div class="button-row">
+        <button class="action-btn" id="calibrationContinueBtn" type="button" hidden><i data-lucide="check"></i><span>Continue anyway</span></button>
+        <button class="action-btn secondary" id="calibrationRestartBtn" type="button"><i data-lucide="rotate-ccw"></i><span>Restart</span></button>
+        <button class="action-btn" id="calibrationDoneBtn" type="button" hidden><i data-lucide="scan-heart"></i><span>Done</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="reportInputsModal" role="dialog" aria-modal="true" aria-labelledby="reportInputsTitle" aria-hidden="true">
+    <div class="modal-card panel report-inputs-modal">
+      <div class="card-title-row">
+        <div><h3 id="reportInputsTitle">Captured Data Inputs</h3><p class="subtext">Recorded vital-sign and emotion snapshots. Select a row for details.</p></div>
+        <button class="icon-btn" id="closeReportInputsModalBtn" type="button" title="Close data inputs" aria-label="Close data inputs"><i data-lucide="x"></i></button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Timestamp</th><th>Emotion</th><th>Conf.</th><th>HR</th><th>GSR</th><th>Temp</th><th>Motion</th><th>Eyebag</th><th>Wrinkle</th><th>Fatigue</th><th>LSTM</th></tr>
+          </thead>
+          <tbody id="reportInputTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="recordModal" role="dialog" aria-modal="true" aria-labelledby="recordModalTitle" aria-hidden="true">
+    <div class="modal-card panel">
+      <div class="card-title-row">
+        <h3 id="recordModalTitle">Record Details</h3>
+        <button class="icon-btn" id="closeRecordModalBtn" type="button" title="Close" aria-label="Close record details"><i data-lucide="x"></i></button>
+      </div>
+      <div class="record-detail-grid" id="recordDetailGrid"></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="patientProfileModal" role="dialog" aria-modal="true" aria-labelledby="patientProfileModalTitle" aria-hidden="true">
+    <div class="modal-card panel patient-profile-modal">
+      <div class="card-title-row">
+        <div><h3 id="patientProfileModalTitle">Patient profile</h3><p class="subtext">Baseline and linked records for the selected patient.</p></div>
+        <div class="modal-header-actions">
+          <button class="action-btn secondary compact" id="exportPatientCsvBtn" type="button" title="Download CSV for this patient">
+            <i data-lucide="download"></i><span>Download CSV</span>
+          </button>
+          <button class="icon-btn" id="closePatientProfileModalBtn" type="button" title="Close patient profile" aria-label="Close patient profile"><i data-lucide="x"></i></button>
+        </div>
+      </div>
+      <div class="profile-tabs" id="profileTabs" role="tablist" aria-label="Patient profiles"></div>
+      <div class="profile-detail panel" id="profileDetail" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="patientManagementModal" role="dialog" aria-modal="true" aria-labelledby="patientManagementTitle" aria-hidden="true">
+    <div class="modal-card panel patient-management-modal">
+      <div class="card-title-row">
+        <div><h3 id="patientManagementTitle">Manage patients</h3><p class="subtext">Add a patient or manage the active patient profile.</p></div>
+        <button class="icon-btn" id="closePatientManagementModalBtn" type="button" title="Close patient management" aria-label="Close patient management"><i data-lucide="x"></i></button>
+      </div>
+      <label class="setting-row patient-name-input">
+        <span>Patient name / code</span>
+        <input type="text" id="profileNameInput" maxlength="120" autocomplete="off" placeholder="Enter a patient name or code" />
+      </label>
+      <div class="patient-management-actions">
+        <button class="action-btn" id="addPatientBtn" type="button">
+          <i data-lucide="user-round-plus"></i><span>Add patient</span>
+        </button>
+        <button class="action-btn secondary" id="viewPatientBtn" type="button" disabled>
+          <i data-lucide="eye"></i><span>View profile</span>
+        </button>
+        <button class="action-btn secondary" id="updatePatientBtn" type="button" disabled>
+          <i data-lucide="user-round-pen"></i><span>Rename patient</span>
+        </button>
+        <button class="action-btn secondary" id="deletePatientBtn" type="button" disabled>
+          <i data-lucide="user-round-x"></i><span>Delete patient</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
