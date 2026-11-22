@@ -12,7 +12,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173/PsycheScan/` in **Chrome or Edge**. Web Serial does not work in Firefox or Safari.
+Open `http://localhost:5173/DATA-GATHERING/` in **Chrome or Edge**. Web Serial does not work in Firefox or Safari.
 
 ### Testing without the ESP32
 
@@ -29,6 +29,6 @@ npm run build     # output in dist/
 npm run lint
 ```
 
-The app lives in the `NeoN1015/PsycheScan` repo under `WEBSITE FOR DATA GATHERING/Data_Gathering/psychescan-collect/`. Every push to the `Defense` branch builds and deploys it to GitHub Pages at `https://neon1015.github.io/PsycheScan/`, through `.github/workflows/deploy.yml` at the **repository root** (GitHub ignores workflow files inside subfolders). One-time repo setting: **Settings → Pages → Source: GitHub Actions**.
+Every push to `main` of `NeoN1015/DATA-GATHERING` builds and deploys to GitHub Pages at `https://neon1015.github.io/DATA-GATHERING/` (`.github/workflows/deploy.yml`). One-time repo setting: **Settings → Pages → Source: GitHub Actions**.
 
-`vite.config.js` sets `base: "/PsycheScan/"`, which must match the repository name exactly (case-sensitive).
+`vite.config.js` sets `base: "/DATA-GATHERING/"`, which must match the repository name exactly (case-sensitive).
