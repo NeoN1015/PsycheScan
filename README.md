@@ -2,7 +2,7 @@
 
 ## Live websites
 
-- [Data Gathering website](https://neon1015.github.io/DATA-GATHERING/)
+- [Data Gathering website](https://neon1015.github.io/PsycheScan/)
 - [Official PsycheScan website](https://neon1015.github.io/PsycheScan/official/)
 
 ## Data Gathering source
