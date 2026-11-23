@@ -41,7 +41,7 @@ export default function OperatorPanel() {
         <h3 className="panel-title">Live sensors</h3>
         <LiveValues size="small" />
       </section>
-      {import.meta.env.DEV && <SimulateSwitch />}
+      <SimulateSwitch />
     </aside>
   );
 }

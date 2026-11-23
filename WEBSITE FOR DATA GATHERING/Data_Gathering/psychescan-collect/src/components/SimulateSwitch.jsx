@@ -15,7 +15,7 @@ export default function SimulateSwitch() {
         disabled={usbInUse}
         onChange={(e) => (e.target.checked ? serial.startSim() : serial.stopSim())}
       />
-      Simulate sensors <span className="dev-tag">DEV</span>
+      Demo mode <span className="dev-tag">SIM</span>
     </label>
   );
 }

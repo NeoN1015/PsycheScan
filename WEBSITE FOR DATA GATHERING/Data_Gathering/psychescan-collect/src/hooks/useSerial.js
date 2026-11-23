@@ -118,19 +118,19 @@ export function useSerial(latestSensorRef, onEvent) {
     await loopRef.current;
   }, []);
 
-  // DEV ONLY: fake sensor stream. In a production build import.meta.env.DEV is
-  // false, so the whole block (and the simulator module) is removed.
+  // Demo mode: fake sensor stream so anyone can try the app without the
+  // prototype. Sessions that use it are flagged SIMULATED in the CSV.
   const startSim = useCallback(async () => {
-    if (import.meta.env.DEV) {
-      if (portRef.current || simTimerRef.current) return;
-      const { createSimSensor } = await import("../lib/simSensor.js");
-      const nextLine = createSimSensor();
-      bufferRef.current = "";
-      simTimerRef.current = setInterval(() => feed(nextLine() + "\n"), 1000);
-      setSimulated(true);
-      setConnected(true);
-      onEventRef.current?.("sim_sensors_on", "dev-only simulated sensor lines");
-    }
+    if (portRef.current || simTimerRef.current) return;
+    const { createSimSensor } = await import("../lib/simSensor.js");
+    if (portRef.current || simTimerRef.current) return;
+    const nextLine = createSimSensor();
+    bufferRef.current = "";
+    feed(nextLine() + "\n"); // first reading immediately, then once per second
+    simTimerRef.current = setInterval(() => feed(nextLine() + "\n"), 1000);
+    setSimulated(true);
+    setConnected(true);
+    onEventRef.current?.("sim_sensors_on", "demo mode: simulated sensor lines");
   }, [feed]);
 
   const stopSim = useCallback(() => {

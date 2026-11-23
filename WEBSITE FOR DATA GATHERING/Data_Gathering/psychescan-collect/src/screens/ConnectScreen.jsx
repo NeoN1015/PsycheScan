@@ -1,4 +1,5 @@
 import { useState } from "react";
+import LiveValues from "../components/LiveValues.jsx";
 import StatusRow from "../components/StatusRow.jsx";
 import { CONFIG } from "../config.js";
 import { useDisplayTick } from "../hooks/useDisplayTick.js";
@@ -31,8 +32,23 @@ export default function ConnectScreen() {
         <button type="button" className="btn" onClick={onConnectUsb} disabled={serial.connected}>
           {serial.connected ? "USB connected" : "Connect USB"}
         </button>
+        {serial.simulated ? (
+          <button type="button" className="btn secondary" onClick={serial.stopSim}>
+            Stop demo
+          </button>
+        ) : (
+          <button type="button" className="btn secondary" onClick={serial.startSim} disabled={serial.connected}>
+            Try demo (no device)
+          </button>
+        )}
       </div>
       {error && <p className="error-text">{error}</p>}
+      {serial.simulated && (
+        <p className="muted">
+          Demo mode: these are simulated sensor readings, not real data. The session will be marked SIMULATED.
+        </p>
+      )}
+      <LiveValues size="large" />
 
       <ConnectChecks watchOk={watchOk}>
         <label className="check big-check">
