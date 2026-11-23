@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PsycheScan Defense Report</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@600;700;800&display=swap">
+<style>
+/* Layout: the manuscript as a guided report — problem → objectives → evidence → answer, one chapter per screen. */
+:root {
+  --bg: #f5f4fa;
+  --surface: #ffffff;
+  --surface-2: #eeebf8;
+  --fg: #1b1830;
+  --muted: #5d5a73;
+  --line: #dcd8ec;
+  --accent: #6247f0;
+  --accent-soft: #ebe7ff;
+  --device: #0a74b5;
+  --server: #b52f8f;
+  --minimal: #15803d;
+  --mild: #a16207;
+  --moderate: #c2410c;
+  --severe: #dc2626;
+  --display: "Manrope", "Segoe UI", system-ui, sans-serif;
+  --body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --radius: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #100e1b; --surface: #1a1729; --surface-2: #231f38; --fg: #ecebf5; --muted: #a8a4c1;
+    --line: #2f2a4a; --accent: #9b87ff; --accent-soft: #2a2350;
+    --device: #4fb4f0; --server: #ec6cc6; --minimal: #4ade80; --mild: #facc15; --moderate: #fb923c; --severe: #f87171;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #100e1b; --surface: #1a1729; --surface-2: #231f38; --fg: #ecebf5; --muted: #a8a4c1;
+  --line: #2f2a4a; --accent: #9b87ff; --accent-soft: #2a2350;
+  --device: #4fb4f0; --server: #ec6cc6; --minimal: #4ade80; --mild: #facc15; --moderate: #fb923c; --severe: #f87171;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.6; }
+h1, h2, h3, h4 { font-family: var(--display); line-height: 1.15; margin: 0; text-wrap: balance; letter-spacing: -0.015em; }
+p { margin: 0; }
+a { color: var(--accent); }
+code, .mono { font-family: var(--mono); font-size: 0.86em; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.scroll-x { overflow-x: auto; }
+.eyebrow { font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
+.muted { color: var(--muted); }
+.cite { color: var(--muted); font-size: 0.82rem; }
+
+/* Top bar */
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--surface); }
+.topbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.topbar .wrap { display: flex; align-items: center; gap: 14px; height: 58px; }
+.brandmark { font-family: var(--display); font-weight: 800; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+.brandmark span { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); transform: rotate(45deg); }
+.chapters { position: relative; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
+.chapters::-webkit-scrollbar { display: none; }
+.chapters a { white-space: nowrap; text-decoration: none; color: var(--muted); font-size: 0.82rem; padding: 6px 10px; border-radius: 999px; }
+.chapters a:hover { color: var(--fg); background: var(--surface-2); }
+.chapters a.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.icon-btn { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; height: 34px; padding: 0 10px; cursor: pointer; font-size: 0.8rem; white-space: nowrap; }
+.icon-btn:hover { border-color: var(--accent); }
+.progress { height: 2px; background: var(--accent); width: 0; }
+
+/* Hero */
+.hero { padding-block: 64px 40px; display: grid; gap: 24px; }
+.hero h1 { font-size: clamp(2.6rem, 7vw, 4.4rem); font-weight: 800; }
+.hero h1 em { font-style: normal; color: var(--accent); }
+.hero .study { font-family: var(--display); font-weight: 600; font-size: clamp(1.02rem, 1.9vw, 1.25rem); max-width: 64ch; }
+.team { display: flex; flex-wrap: wrap; gap: 8px; }
+.team span { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-size: 0.86rem; }
+.byline { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 0.88rem; color: var(--muted); }
+.byline strong { color: var(--fg); }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.fact { background: var(--surface); padding: 16px 18px; display: grid; gap: 2px; }
+.fact b { font-family: var(--display); font-size: 1.9rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.fact span { font-size: 0.84rem; color: var(--muted); }
+
+/* Sections */
+section.chapter { padding-block: 64px; border-top: 1px solid var(--line); }
+.chapter-head { display: grid; gap: 10px; margin-bottom: 28px; max-width: 72ch; }
+.chapter-head h2 { font-size: clamp(1.6rem, 3.4vw, 2.2rem); font-weight: 800; }
+.chapter-head p { color: var(--muted); font-size: 1.02rem; }
+h3.sub { font-size: 1.2rem; margin: 36px 0 14px; }
+.say { margin-top: 22px; display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 12px; background: var(--accent-soft); font-size: 0.95rem; max-width: 82ch; }
+.say b { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); white-space: nowrap; padding-top: 3px; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.grid-2 > *, .grid-3 > * { min-width: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; min-width: 0; }
+.panel h3 { font-size: 1.05rem; margin-bottom: 8px; }
+.panel p + p { margin-top: 8px; }
+ul.clean { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ok { color: var(--minimal); font-weight: 600; }
+
+/* Introduction */
+.big-stat { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 20px; align-items: center; }
+.big-stat b { font-family: var(--display); font-size: clamp(3rem, 8vw, 5rem); font-weight: 800; line-height: 0.9; color: var(--accent); font-variant-numeric: tabular-nums; }
+.big-stat p { font-size: 1.05rem; max-width: 46ch; }
+.versus { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 24px; }
+.versus .panel { border-top: 3px solid var(--c); }
+.versus .panel.us { background: var(--accent-soft); border-color: var(--accent); }
+.x { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; font-size: 0.9rem; }
+.x li { padding-left: 22px; position: relative; }
+.x li::before { position: absolute; left: 0; top: 0; font-weight: 700; }
+.x.no li::before { content: "✕"; color: var(--severe); }
+.x.yes li::before { content: "✓"; color: var(--minimal); }
+
+/* Background chain */
+.chain { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.chain > div { background: var(--surface); padding: 18px; display: grid; gap: 6px; align-content: start; position: relative; }
+.chain > div + div { border-left: 1px solid var(--line); }
+.chain .n { font-family: var(--mono); font-size: 0.72rem; color: var(--accent); letter-spacing: 0.08em; }
+.chain h3 { font-size: 1rem; }
+.chain p { font-size: 0.88rem; }
+.chain .stat { font-family: var(--display); font-weight: 800; font-size: 1.5rem; color: var(--accent); }
+
+/* Literature */
+.theme { display: grid; gap: 8px; align-content: start; }
+.theme .tag { justify-self: start; }
+.tag { display: inline-block; font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 8px; border-radius: 6px; background: var(--surface-2); color: var(--muted); }
+.theme ul { margin: 0; padding-left: 18px; display: grid; gap: 5px; font-size: 0.88rem; }
+.stages { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; margin: 10px 0; }
+.stage { flex: 1 1 110px; border-radius: 10px; padding: 10px 12px; font-size: 0.82rem; background: color-mix(in srgb, var(--s) 14%, var(--surface)); border: 1px solid color-mix(in srgb, var(--s) 40%, transparent); }
+.stage b { display: block; font-family: var(--display); font-size: 0.95rem; color: var(--s); }
+.ipo { display: grid; grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1.2fr) 36px minmax(0, 1fr); align-items: stretch; }
+.ipo .box { background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--c); border-radius: var(--radius); padding: 18px; display: grid; gap: 8px; align-content: start; }
+.ipo .box h3 { font-size: 1.1rem; }
+.ipo .box ul { margin: 0; padding-left: 18px; display: grid; gap: 5px; font-size: 0.88rem; }
+.ipo .arrow { display: grid; place-items: center; color: var(--muted); font-size: 1.4rem; }
+
+/* SOP & objectives */
+.qa { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; counter-reset: q; }
+.qa li { counter-increment: q; display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 16px; align-items: start; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+.qa li::before { content: counter(q); width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-family: var(--display); font-weight: 800; font-size: 1.3rem; }
+.qa .q { font-family: var(--display); font-weight: 700; font-size: 1.06rem; line-height: 1.35; }
+.qa .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; align-items: center; }
+.chip { font-size: 0.78rem; padding: 3px 10px; border-radius: 999px; background: var(--surface-2); }
+.jump { font-size: 0.8rem; text-decoration: none; font-weight: 600; margin-left: auto; }
+.jump:hover { text-decoration: underline; }
+
+/* Results */
+.range { display: grid; grid-template-columns: 170px minmax(0, 1fr) 120px; gap: 14px; align-items: center; padding: 12px 0; border-bottom: 1px dashed var(--line); font-size: 0.88rem; }
+.range:last-child { border: 0; }
+.range .name b { display: block; font-family: var(--display); }
+.track { position: relative; height: 34px; }
+.track .rail { position: absolute; left: 0; right: 0; top: 15px; height: 4px; border-radius: 2px; background: var(--surface-2); }
+.track .ref { position: absolute; top: 9px; height: 16px; border-radius: 4px; background: color-mix(in srgb, var(--minimal) 22%, transparent); border: 1px dashed color-mix(in srgb, var(--minimal) 60%, transparent); }
+.track .obs { position: absolute; top: 13px; height: 8px; border-radius: 4px; background: var(--accent); }
+.track .lim { position: absolute; top: 4px; width: 2px; height: 26px; background: var(--severe); }
+.track .lbl { position: absolute; top: 26px; transform: translateX(-50%); font-family: var(--mono); font-size: 0.66rem; color: var(--muted); white-space: nowrap; }
+.result-block { margin-top: 36px; }
+.result-block > .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 14px; margin-bottom: 14px; }
+.result-block > .head .num { font-family: var(--mono); font-size: 0.8rem; color: var(--accent); }
+.result-block > .head h3 { font-size: 1.25rem; }
+.metric-row { display: grid; grid-template-columns: 90px minmax(0, 1fr) 54px; gap: 10px; align-items: center; font-size: 0.84rem; }
+.bars { display: grid; gap: 4px; }
+.bar { height: 12px; border-radius: 6px; background: var(--surface-2); overflow: hidden; }
+.bar div { height: 100%; border-radius: 6px; }
+.metrics { display: grid; gap: 12px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.8rem; color: var(--muted); margin-bottom: 10px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.n-right { font-family: var(--mono); text-align: right; font-variant-numeric: tabular-nums; }
+.kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.kpi div { background: var(--surface-2); border-radius: 10px; padding: 12px; }
+.kpi b { display: block; font-family: var(--display); font-size: 1.5rem; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+.kpi span { font-size: 0.78rem; color: var(--muted); }
+.cm { display: grid; grid-template-columns: 92px repeat(4, minmax(56px, 1fr)); gap: 3px; font-size: 0.8rem; min-width: 420px; }
+.cm div { padding: 8px 6px; border-radius: 6px; text-align: center; font-variant-numeric: tabular-nums; }
+.cm .h { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); background: none; }
+.cm .rh { text-align: left; }
+.cm .d { background: color-mix(in srgb, var(--accent) 34%, var(--surface)); font-weight: 700; }
+.cm .e { background: color-mix(in srgb, var(--severe) 18%, var(--surface)); }
+.cm .z { background: var(--surface-2); color: var(--muted); }
+.note { font-size: 0.86rem; padding: 10px 12px; border-left: 3px solid var(--mild); background: color-mix(in srgb, var(--mild) 10%, var(--surface)); border-radius: 0 8px 8px 0; margin-top: 12px; }
+
+/* Findings thread */
+.thread-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; align-items: center; }
+.thread-tools button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 14px; cursor: pointer; font-size: 0.86rem; font-weight: 600; }
+.thread-tools button[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+.thread { display: grid; grid-template-columns: 44px repeat(4, minmax(180px, 1fr)); gap: 8px; min-width: 860px; }
+.thread .th { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 0 4px 4px; }
+.thread .cell { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; font-size: 0.86rem; transition: opacity 0.2s, border-color 0.2s; }
+.thread .cell b { display: block; font-family: var(--display); margin-bottom: 2px; }
+.thread .idx { display: grid; place-items: center; font-family: var(--display); font-weight: 800; font-size: 1.2rem; color: var(--accent); background: var(--accent-soft); border-radius: 10px; }
+.thread .to { position: relative; }
+.thread.focus [data-row]:not(.hit) { opacity: 0.3; }
+.thread .hit.cell { border-color: var(--accent); }
+.finding { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 14px; padding: 16px 0; border-bottom: 1px dashed var(--line); }
+.finding:last-child { border: 0; }
+.finding .k { font-family: var(--display); font-weight: 800; font-size: 1.2rem; color: var(--accent); }
+.finding h3 { font-size: 1.05rem; margin-bottom: 4px; }
+
+/* Conclusion & recommendations */
+.pull { font-family: var(--display); font-size: clamp(1.25rem, 2.6vw, 1.7rem); font-weight: 700; line-height: 1.35; max-width: 40ch; }
+.recs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; counter-reset: r; }
+.recs li { counter-increment: r; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 18px 18px 60px; position: relative; font-size: 0.9rem; }
+.recs li::before { content: counter(r); position: absolute; left: 18px; top: 16px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-family: var(--display); font-weight: 800; }
+.recs li b { display: block; font-family: var(--display); font-size: 1rem; margin-bottom: 4px; }
+.recs .area { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+
+footer { border-top: 1px solid var(--line); padding-block: 40px 56px; }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; align-items: end; }
+.creator { font-family: var(--display); font-size: 1.3rem; font-weight: 800; }
+.creator small { display: block; font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); font-weight: 500; }
+
+@media (max-width: 760px) {
+  .ipo { grid-template-columns: 1fr; }
+  .ipo .arrow { transform: rotate(90deg); height: 30px; }
+  .chain > div + div { border-left: 0; border-top: 1px solid var(--line); }
+  .range { grid-template-columns: 1fr; gap: 4px; }
+  .brandmark b { display: none; }
+  .big-stat { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; }
+}
+</style>
+
+<header class="topbar">
+  <div class="wrap">
+    <div class="brandmark"><span></span><b>PsycheScan</b></div>
+    <nav class="chapters" id="chapters" aria-label="Sections">
+      <a href="#introduction">Introduction</a>
+      <a href="#background">Background</a>
+      <a href="#literature">Literature</a>
+      <a href="#problem">Problem</a>
+      <a href="#objectives">Objectives</a>
+      <a href="#results">Results</a>
+      <a href="#findings">Findings</a>
+      <a href="#conclusion">Conclusion</a>
+      <a href="#recommendations">Recommendations</a>
+    </nav>
+    <button class="icon-btn" id="themeBtn" type="button" title="Switch light or dark">Theme</button>
+  </div>
+  <div class="progress" id="progress"></div>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div class="eyebrow">CpE26 · COEN4202 Design Project · Colegio de Muntinlupa</div>
+    <h1><em>PsycheScan</em></h1>
+    <p class="study">A Real-Time Mental Health Detection System Using Vital Sign Sensors with Hybrid CNN-LSTM Algorithms for In-Depth Analysis of Stress and Anxiety Parameters</p>
+    <div class="team"><span>Ageas, Axel B.</span><span>Carreon, Jannah Leigh M.</span><span>Esplana, Gerald C.</span><span>Ruina, Shane R.</span></div>
+    <div class="byline"><span>Adviser: <strong>Engr. Ricrey E. Marquez, MSCS, PCpE</strong></span><span>Created by <strong>Gerald C. Esplana</strong></span><span>Use ← → to move between sections</span><a href="PsycheScan_System_Map.html">Open the system map</a></div>
+    <div class="facts">
+      <div class="fact"><b>30</b><span>participants at the Community-Based Mental Health Clinic</span></div>
+      <div class="fact"><b>4</b><span>biometric sensors through the ESP32</span></div>
+      <div class="fact"><b>84.80%</b><span>CNN facial emotion accuracy</span></div>
+      <div class="fact"><b>54.40%</b><span>LSTM stress-level accuracy</span></div>
+      <div class="fact"><b>0.90–0.97</b><span>sensor correlation (Pearson r)</span></div>
+      <div class="fact"><b>0</b><span>cloud services needed</span></div>
+    </div>
+  </div>
+
+  <!-- INTRODUCTION -->
+  <section class="chapter" id="introduction">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Introduction</div>
+        <h2>Distress is rising, and screening can't reach everyone</h2>
+      </div>
+      <div class="big-stat">
+        <b>1.5M+</b>
+        <p>Filipinos aged 15 to 24 affected by depressive symptoms and suicide-related behaviors. <span class="cite">(Ferguson et al., 2025; UPPI, 2022)</span></p>
+      </div>
+      <p class="muted" style="margin-top:14px;max-width:72ch">The COVID-19 pandemic, academic pressure, social isolation and economic instability have driven a sharp rise in emotional distress nationwide. These trends call for accessible, data-driven screening that supports early intervention, especially in low-resource communities.</p>
+      <div class="versus">
+        <div class="panel" style="--c:var(--severe)"><h3>Traditional assessments</h3><p class="cite">PHQ-9, structured interviews</p><ul class="x no"><li>Rely on self-reporting</li><li>Often inaccessible in rural areas</li><li>Prone to subjectivity</li></ul><p class="cite" style="margin-top:8px">(DOH, 2023; Bautista &amp; Reyes, 2022)</p></div>
+        <div class="panel" style="--c:var(--mild)"><h3>Commercial wearables</h3><p class="cite">Stress-tracking smartwatches and rings</p><ul class="x no"><li>Proprietary algorithms</li><li>Cloud-based processing</li><li>Single input, like HRV or skin temperature</li></ul><p class="cite" style="margin-top:8px">(Jolly et al., 2025; Tanwar et al., 2022)</p></div>
+        <div class="panel us" style="--c:var(--accent)"><h3>PsycheScan</h3><p class="cite">This study</p><ul class="x yes"><li>Real-time and offline-capable</li><li>Face + heart rate, skin conductance, temperature, motion</li><li>Hybrid CNN-LSTM fusion on a Lenovo ThinkCentre M710Q</li><li>Decision support for barangay health workers and medical practitioners</li></ul></div>
+      </div>
+      <div class="say"><b>Say it</b><span>"PsycheScan is a secondary decision-support tool. It complements standardized clinical assessment; it doesn't replace it."</span></div>
+    </div>
+  </section>
+
+  <!-- BACKGROUND -->
+  <section class="chapter" id="background">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Background of the Study</div>
+        <h2>From subjective questionnaires to signals the body gives off</h2>
+        <p>Stress and anxiety affect over 260 million people globally, according to the World Health Organization, and are leading contributors to disability. For health practitioners, early and accurate detection is critical for timely intervention. <span class="cite">(Brasier et al., 2025)</span></p>
+      </div>
+      <div class="chain">
+        <div><span class="n">THE LIMIT</span><h3>Assessments miss real-time change</h3><p>Clinical interviews and questionnaires suffer from subjectivity and recall bias, and can't capture how a patient's state changes in the moment.</p></div>
+        <div><span class="n">THE SIGNALS</span><h3>Vital signs track stress</h3><p>Heart rate variability, electrodermal activity, respiration and body temperature correlate strongly with stress and anxiety, and can be measured continuously. <span class="cite">(Kargarandehkordi et al., 2025)</span></p></div>
+        <div><span class="n">THE MODEL</span><h3>CNN finds patterns, LSTM follows time</h3><p>CNNs pick out local, spatial patterns; LSTMs capture long-term dependencies. Together they detect subtle changes in mental state. <span class="cite">(Tanwar et al., 2022)</span></p></div>
+        <div><span class="n">THE EVIDENCE</span><div class="stat">98.6% · 95%</div><p>EmotionNet, EEG with CNN-LSTM (Daadaa, 2025); AI wearable mental-health system with CNN and LSTM (Mouthami et al., 2025).</p></div>
+        <div><span class="n">THE GAP</span><h3>Not yet in clinical workflows</h3><p>Data standardization, interpretability and clinical integration remain open problems <span class="cite">(Xing et al., 2025)</span>. This study builds a real-time early detection system to help practitioners act sooner.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LITERATURE -->
+  <section class="chapter" id="literature">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Review of Related Literature</div>
+        <h2>Six threads the literature agrees on</h2>
+        <p>Rising youth distress, weak self-report and cloud wearables, and maturing embedded and deep-learning tools point to the same answer: a locally processed, multimodal, CNN-LSTM screening platform.</p>
+      </div>
+      <div class="grid-3">
+        <div class="panel theme"><span class="tag">Need</span><h3>Mental health screening and youth vulnerability</h3><ul><li>Over 1.5M Filipino youth affected; worsened by academic, economic and pandemic stress (Marquez et al., 2025).</li><li>DOH (2023) calls for scalable, community-based screening.</li><li>PHQ-9 relies on self-report and verbal disclosure, limiting it in low-literacy or stigmatized settings (Bautista &amp; Reyes, 2022).</li></ul></div>
+        <div class="panel theme"><span class="tag">Feasibility</span><h3>Wearables for real-time stress monitoring</h3><ul><li>AI smart wristband detects stress on-device, offline (Mitro et al., 2024).</li><li>Smart Band AI system tracks stress, fatigue and anxiety from HR, temperature and movement (Bai et al., 2025).</li><li>MindBand: affordable, offline AI for underserved populations (Satapathy et al.).</li><li>WESAD: multimodal fusion beats single sensors (Schmidt et al., 2018).</li></ul></div>
+        <div class="panel theme"><span class="tag">Gap</span><h3>Limits of commercial wearables</h3><ul><li>Fitbit Sense, Oura Ring and Apple Watch Series 9 use proprietary, cloud-based algorithms (Jolly et al., 2025; Delos Reyes &amp; Tan, 2024).</li><li>They lack multimodal integration for diagnostic-grade analysis (Hickey et al., 2021).</li><li>Most aren't validated against clinical standards (Sharma, 2025).</li></ul></div>
+        <div class="panel theme"><span class="tag">Hardware</span><h3>Multimodal sensors on embedded platforms</h3><ul><li>HW-827, GSR, DS18B20 and MPU6050 already proven in real-time monitoring (Ahmed &amp; Kumar, 2023).</li><li>Facial landmarks plus biometrics improve stress detection (Hosseini et al., 2023).</li><li>Offline embedded systems suit rural screening, supporting ESP32 (Lee &amp; Park, 2022).</li></ul></div>
+        <div class="panel theme"><span class="tag">Model</span><h3>Deep learning for emotion: CNN-LSTM</h3><ul><li>Over 90% stress classification with CNN-LSTM (Chen &amp; Zhang, 2021; Tanwar et al., 2022).</li><li>Robust in real time (Jain &amp; Srihari, 2024).</li><li>CNN catches stress-related microexpressions (Kishore et al., 2025).</li><li>Face + physiology beats either alone (Wang et al., 2020).</li></ul></div>
+        <div class="panel theme"><span class="tag">Use</span><h3>Decision support in community health</h3><ul><li>AI decision support adds objective, data-driven assessment (Tutun et al., 2023).</li><li>Barangay health workers need digital screening tools (Gonzales &amp; Lim, 2023).</li><li>Offline, localized tools bridge research and practice in Southeast Asia (Alvarez &amp; Santos, 2024).</li></ul></div>
+      </div>
+
+      <h3 class="sub">Theoretical framework</h3>
+      <div class="grid-2">
+        <div class="panel"><span class="tag">Picard, 1997</span><h3 style="margin-top:8px">Affective computing</h3><p>Machines can recognize emotion from physiological and behavioral cues. This guided combining facial expression analysis with biometric sensing.</p></div>
+        <div class="panel"><span class="tag">Hans Selye</span><h3 style="margin-top:8px">General Adaptation Syndrome</h3>
+          <div class="stages">
+            <div class="stage" style="--s:var(--mild)"><b>Alarm</b>Sympathetic activation: heart rate and EDA rise</div>
+            <div class="stage" style="--s:var(--moderate)"><b>Resistance</b>Responses stay elevated</div>
+            <div class="stage" style="--s:var(--severe)"><b>Exhaustion</b>Higher risk of anxiety</div>
+          </div>
+          <p class="muted" style="font-size:.88rem">Links stress to measurable changes in heart rate, skin conductance and temperature, which justifies the sensors.</p></div>
+        <div class="panel"><span class="tag">Lazarus &amp; Folkman, 1984</span><h3 style="margin-top:8px">Transactional Model of Stress and Coping</h3>
+          <div class="stages">
+            <div class="stage" style="--s:var(--device)"><b>Primary appraisal</b>Is this a threat?</div>
+            <div class="stage" style="--s:var(--accent)"><b>Secondary appraisal</b>Can I cope?</div>
+          </div>
+          <p class="muted" style="font-size:.88rem">Stress depends on perception, which shows on the face. This justifies pairing facial expression with physiology.</p></div>
+        <div class="panel"><span class="tag">Chen &amp; Zhang, 2021 · Tanwar et al., 2022</span><h3 style="margin-top:8px">CNN-LSTM hybrid architecture</h3><p>CNNs extract spatial features; LSTMs recognize temporal patterns. The hybrid captures emotional transitions over time, which is why the study adopted it.</p></div>
+      </div>
+
+      <h3 class="sub">Conceptual framework (IPO)</h3>
+      <div class="ipo">
+        <div class="box" style="--c:var(--device)"><span class="eyebrow">Input</span><h3>Face and vital signs</h3><ul><li>USB webcam on the Lenovo ThinkCentre M710Q</li><li>HW-827 pulse sensor (heart rate)</li><li>GSR sensor (skin conductance)</li><li>DS18B20 (body temperature)</li><li>MPU6050 (motion)</li><li>All through ESP32 microcontrollers</li></ul></div>
+        <div class="arrow">→</div>
+        <div class="box" style="--c:var(--accent)"><span class="eyebrow">Process</span><h3>Synchronize, record, analyze</h3><ul><li>Data acquisition and synchronization</li><li>Timestamped CSV logging across all modalities</li><li>GUI for real-time monitoring and visualization</li><li>CNN layers extract facial and physiological features</li><li>LSTM layers capture how they change over time</li></ul></div>
+        <div class="arrow">→</div>
+        <div class="box" style="--c:var(--server)"><span class="eyebrow">Output</span><h3>Stress and anxiety level</h3><ul><li>Classification from multimodal analysis</li><li>Reference for health professionals alongside standardized assessment</li><li>Compared with commercial wearables for reliability</li><li>Reviewed with health-professional feedback</li></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATEMENT OF THE PROBLEM -->
+  <section class="chapter" id="problem">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Statement of the Problem</div>
+        <h2>Four questions this study answers</h2>
+        <p>Existing tools like the PHQ-9 are often inaccessible, subjective and limited in low-resource settings, while commercial wearables offer basic tracking without transparency, depth or clinical use.</p>
+      </div>
+      <ol class="qa">
+        <li><div><p class="q">How can mental health screening be improved in rural communities where self-report tools may be unreliable, and serve as a secondary support tool for medical practitioners and barangay health workers?</p><div class="meta"><span class="chip">Accessibility</span><span class="chip">Decision support</span><a class="jump" href="#r1">See result 4.1 →</a></div></div></li>
+        <li><div><p class="q">How can a low-cost, real-time, offline-capable system be designed to overcome the limitations of cloud-dependent technologies in stress and anxiety detection?</p><div class="meta"><span class="chip">Low cost</span><span class="chip">Offline</span><span class="chip">Real time</span><a class="jump" href="#r2">See result 4.2 →</a></div></div></li>
+        <li><div><p class="q">How can facial expression and biometric signals be combined using CNN-LSTM for accurate, real-time stress and anxiety detection?</p><div class="meta"><span class="chip">Multimodal fusion</span><span class="chip">CNN-LSTM</span><a class="jump" href="#r3">See result 4.3 →</a></div></div></li>
+        <li><div><p class="q">How accurate and reliable are the biometric sensors compared to commercial wearable devices in measuring physiological parameters?</p><div class="meta"><span class="chip">Sensor accuracy</span><span class="chip">Reliability</span><a class="jump" href="#r4">See result 4.4 →</a></div></div></li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- OBJECTIVES -->
+  <section class="chapter" id="objectives">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Objectives of the Study</div>
+        <h2>One objective per question, each with its measure</h2>
+        <p>The general aim: develop a real-time, offline-capable mental health detection system using vital sign sensors and facial recognition, powered by a hybrid CNN-LSTM algorithm.</p>
+      </div>
+      <ol class="qa">
+        <li><div><p class="q">Develop and implement a multimodal mental health screening system for rural communities, and evaluate it as a secondary decision-support tool.</p><div class="meta"><span class="chip">Usability</span><span class="chip">User satisfaction</span><span class="chip">Agreement with practitioners</span><a class="jump" href="#r1">Result 4.1 →</a></div></div></li>
+        <li><div><p class="q">Design and build a low-cost, real-time, offline-capable system, and assess how it performs without the cloud.</p><div class="meta"><span class="chip">Processing latency</span><span class="chip">Responsiveness</span><span class="chip">Offline operation</span><a class="jump" href="#r2">Result 4.2 →</a></div></div></li>
+        <li><div><p class="q">Integrate facial expression recognition and biometric signals using a CNN-LSTM model, and evaluate its classification performance.</p><div class="meta"><span class="chip">Accuracy</span><span class="chip">Precision</span><span class="chip">Recall</span><span class="chip">F1-score</span><a class="jump" href="#r3">Result 4.3 →</a></div></div></li>
+        <li><div><p class="q">Evaluate the accuracy and reliability of the biometric sensors against commercial wearable and reference devices.</p><div class="meta"><span class="chip">MAE</span><span class="chip">Percentage error</span><span class="chip">Correlation coefficient</span><a class="jump" href="#r4">Result 4.4 →</a></div></div></li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- RESULTS -->
+  <section class="chapter" id="results">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Results and Discussion</div>
+        <h2>What 30 participants showed</h2>
+        <p>Data came from 30 participants at the Community-Based Mental Health Clinic. The system recorded heart rate, GSR, temperature and motion, plus eyebag, wrinkle and visual fatigue scores and recognized emotions. System-generated scores ranged from 0 to 100.</p>
+      </div>
+
+      <div class="panel">
+        <h3>Measurements across 30 participants <span class="cite">(Table 7)</span></h3>
+        <div class="legend"><span><i style="background:var(--accent)"></i>Observed range</span><span><i style="background:color-mix(in srgb, var(--minimal) 30%, transparent);border:1px dashed var(--minimal)"></i>Reference / baseline</span><span><i style="background:var(--severe)"></i>Limit</span></div>
+        <div id="ranges"></div>
+      </div>
+
+      <div class="result-block" id="r1">
+        <div class="head"><span class="num">4.1 · OBJECTIVE 1</span><h3>A working multimodal screening system</h3></div>
+        <div class="grid-2">
+          <div class="panel"><ul class="clean">
+            <li>First designed as a wrist-worn device; changed to a wearable form for comfort, given the size of the ESP32 and its components.</li>
+            <li>HW-827, GSR, DS18B20 and MPU6050 connected to the ESP32, which sends readings wirelessly to the main unit.</li>
+            <li>USB webcam added for emotion recognition and visual fatigue analysis.</li>
+            <li>One GUI shows measurements, facial results, emotions and scores.</li>
+          </ul></div>
+          <div class="panel"><div class="kpi"><div><b>30</b><span>participants tested</span></div><div><b>8</b><span>measures per reading</span></div><div><b>73–83.1</b><span>bpm heart rate range</span></div></div><p class="muted" style="font-size:.88rem">Participants with similar heart rates showed different facial outputs and overall scores, which supports combining several data sources instead of relying on one.</p></div>
+        </div>
+      </div>
+
+      <div class="result-block" id="r2">
+        <div class="head"><span class="num">4.2 · OBJECTIVE 2</span><h3>Low cost, real time, no cloud</h3></div>
+        <div class="grid-2">
+          <div class="panel"><ul class="clean">
+            <li><b>Lenovo ThinkCentre M710Q</b> mini PC as the main processing unit.</li>
+            <li><b>ESP32</b> collects and wirelessly transmits the sensor readings.</li>
+            <li>Software in Python with TensorFlow, OpenCV, NumPy, pandas and scikit-learn.</li>
+            <li>Results recorded to CSV for analysis; everything is processed locally.</li>
+            <li>Commercially available hardware keeps it affordable for rural facilities.</li>
+          </ul></div>
+          <div class="panel"><div class="note"><b>Still to measure.</b> Processing latency, actual response time, and operation with the internet disconnected should be measured and documented to fully establish real-time and offline performance.</div></div>
+        </div>
+      </div>
+
+      <div class="result-block" id="r3">
+        <div class="head"><span class="num">4.3 · OBJECTIVE 3</span><h3>CNN-LSTM: the face and the body together</h3></div>
+        <div class="grid-2">
+          <div class="panel">
+            <h3>Model performance <span class="cite">(Table 5)</span></h3>
+            <div class="legend"><span><i style="background:var(--accent)"></i>CNN, facial emotion</span><span><i style="background:var(--device)"></i>LSTM, multimodal temporal</span></div>
+            <div class="metrics" id="modelBars"></div>
+          </div>
+          <div class="panel">
+            <h3>What the LSTM reads</h3>
+            <p style="font-size:.9rem">30-second sequences, one row per second: heart rate, GSR, temperature and motion, plus the CNN's seven emotion probabilities and the fatigue and eyebag scores.</p>
+            <h3 style="margin-top:16px">Adding the face helped</h3>
+            <div class="metrics" id="fusionBars"></div>
+            <p class="cite" style="margin-top:8px">Sensors-only macro F1: 38.58%. With facial outputs: 54.60%.</p>
+          </div>
+        </div>
+        <div class="grid-2" style="margin-top:20px">
+          <div class="panel">
+            <h3>CNN: recognition rate per emotion <span class="cite">(Figure 22)</span></h3>
+            <div class="metrics" id="emotionBars"></div>
+            <p class="muted" style="font-size:.86rem;margin-top:10px">35 epochs. Training accuracy 97.81%; validation peaked at 84.80% (stable at 84.28–84.61% at the end). The ~13-point gap means mild overfitting. Common confusions: Disgust → Sad 14%, Fear → Neutral 11%, Neutral → Sad 8%.</p>
+          </div>
+          <div class="panel scroll-x">
+            <h3>LSTM: confusion matrix highlights <span class="cite">(Figure 21)</span></h3>
+            <p class="cite" style="margin-bottom:10px">Rows: actual level · Columns: predicted · Only counts reported in the manuscript are shown</p>
+            <div class="cm" id="cm"></div>
+            <p class="muted" style="font-size:.86rem;margin-top:10px">5-fold patient-wise cross-validation over 1,966 windows: 54.4% accuracy (54.3% ± 9.2% per fold). Per-class F1: Minimal 59.1%, Mild 58.3%, Moderate 43.2%, Severe 58.0%. Most errors are neighbouring levels; Moderate is hardest (recall 36.2%).</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="result-block" id="r4">
+        <div class="head"><span class="num">4.4 · OBJECTIVE 4</span><h3>Sensor accuracy against reference devices</h3></div>
+        <div class="panel scroll-x">
+          <table style="min-width:640px">
+            <tr><th>Sensor</th><th>Reference device</th><th>MAE</th><th>% error</th><th style="width:34%">Pearson r</th></tr>
+            <tbody id="sensorTable"></tbody>
+          </table>
+          <p class="muted" style="font-size:.86rem;margin-top:10px">All four correlate strongly (r = 0.90–0.97). The DS18B20 has the lowest error (0.51%); the GSR sensor has the strongest correlation (0.97). <span class="cite">(Table 8)</span></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINDINGS -->
+  <section class="chapter" id="findings">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Findings</div>
+        <h2>Each question, answered</h2>
+        <p>Follow one thread from problem to finding. Pick a number, or click any row.</p>
+      </div>
+      <div class="thread-tools" id="threadTools">
+        <button type="button" data-pick="0" aria-pressed="true">All</button>
+        <button type="button" data-pick="1" aria-pressed="false">1</button>
+        <button type="button" data-pick="2" aria-pressed="false">2</button>
+        <button type="button" data-pick="3" aria-pressed="false">3</button>
+        <button type="button" data-pick="4" aria-pressed="false">4</button>
+      </div>
+      <div class="scroll-x"><div class="thread" id="thread"></div></div>
+
+      <div class="panel" style="margin-top:24px">
+        <div class="finding"><div class="k">1</div><div><h3>PsycheScan works as one integrated platform</h3><p>The HW-827, GSR, DS18B20 and MPU6050 sensors, the ESP32, the webcam, the GUI and the CNN-LSTM model were combined and collected multimodal data from 30 participants, showing the system can serve as a supplementary screening tool for healthcare workers and community settings.</p></div></div>
+        <div class="finding"><div class="k">2</div><div><h3>It runs without the cloud, on affordable hardware</h3><p>Local processing on the Lenovo ThinkCentre M710Q and wireless sensor links through the ESP32 let it operate independently of cloud services while showing results in real time, which suits areas with limited internet.</p></div></div>
+        <div class="finding"><div class="k">3</div><div><h3>Combining face and body improves the picture</h3><p>The CNN reached 84.80% accuracy (F1 77.70%) on facial emotion; the LSTM reached 54.40% (F1 54.60%) on stress level. With facial outputs added, the LSTM rose from 37.49% to 54.40%, so the two modalities complement each other.</p></div></div>
+        <div class="finding"><div class="k">4</div><div><h3>The sensors are accurate enough to rely on</h3><p>All sensors recorded values in their expected ranges and correlated strongly with reference devices (r = 0.90–0.97): pulse 0.96, GSR 0.97, temperature 0.94, motion 0.90.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONCLUSION -->
+  <section class="chapter" id="conclusion">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Conclusion</div>
+        <h2>A working, offline, multimodal screening aid</h2>
+      </div>
+      <p class="pull">Facial and physiological information together give a more complete view of stress and anxiety indicators than any single modality alone.</p>
+      <div class="grid-3" style="margin-top:26px">
+        <div class="panel"><h3>Built and deployed</h3><p>PsycheScan combines biometric sensors, webcam facial analysis, local processing and a GUI into one platform that collected and analyzed data from 30 participants, fulfilling the goal of a supplementary screening tool for community and resource-constrained settings.</p></div>
+        <div class="panel"><h3>Backed by numbers</h3><p>CNN 84.80% accuracy for facial emotion; LSTM 54.40% for stress level over time; sensors correlated with reference devices at r = 0.90–0.97. Locally processed monitoring can give health workers objective, real-time information.</p></div>
+        <div class="panel"><h3>Used with care</h3><p>It is a supplementary screening and monitoring tool, not a replacement for clinical diagnosis, psychological evaluation, or instruments like the PHQ-9. Temperature, humidity, lighting, noise, movement, sensor placement and individual differences can affect its readings.</p></div>
+      </div>
+      <div class="say"><b>Say it</b><span>"Its outputs are supportive information that may help early detection and encourage further assessment by qualified mental health professionals."</span></div>
+    </div>
+  </section>
+
+  <!-- RECOMMENDATIONS -->
+  <section class="chapter" id="recommendations">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Recommendations</div>
+        <h2>Where future researchers should take it</h2>
+      </div>
+      <ol class="recs">
+        <li><span class="area">Data</span><b>Expand and balance the dataset</b>A larger, more diverse population, with readings spread evenly so no participant who contributed more data biases the model. This would help the LSTM most.</li>
+        <li><span class="area">Validation</span><b>Better labels for the LSTM</b>Labels came from the system's own integrated score. Validate against standardized tools such as the PHQ-9, or ratings from qualified mental health professionals.</li>
+        <li><span class="area">Model</span><b>Optimize the machine learning</b>Hyperparameter tuning, regularization, feature engineering, class balancing, better multimodal fusion, and alternative deep learning architectures.</li>
+        <li><span class="area">Hardware</span><b>Higher-quality sensors</b>Medical-grade or higher-precision sensors for cleaner signals, less noise, and more consistent data.</li>
+        <li><span class="area">Field</span><b>Larger-scale field testing</b>Schools, workplaces, community health centers and hospitals, watching the effects of temperature, lighting, humidity, movement and sensor placement.</li>
+        <li><span class="area">Face</span><b>Handle a missing face properly</b>Keep the face in frame. When no face is detected the facial features default to zero, which can bias predictions toward higher stress.</li>
+        <li><span class="area">Scope</span><b>More biomarkers and clinical validation</b>Add physiological biomarkers, standardized psychological tools, and clinical validation procedures to strengthen it as a decision-support platform.</li>
+      </ol>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="creator"><small>Created by</small>Gerald C. Esplana</div>
+    <div class="muted" style="font-size:.86rem">PsycheScan · CpE26 · COEN4202 · Colegio de Muntinlupa, Computer Engineering Department · Content from the IMRaD manuscript</div>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+
+  /* Theme */
+  $("themeBtn").addEventListener("click", () => {
+    const root = document.documentElement;
+    const isDark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = isDark ? "light" : "dark";
+  });
+
+  /* Chapter nav: only the tab strip scrolls, never the page */
+  const sections = [...document.querySelectorAll("section.chapter")];
+  const navLinks = [...document.querySelectorAll("#chapters a")];
+  const navBar = $("chapters");
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (!e.isIntersecting) return;
+      navLinks.forEach(a => {
+        const on = a.getAttribute("href") === "#" + e.target.id;
+        a.classList.toggle("active", on);
+        if (on) navBar.scrollLeft = a.offsetLeft - (navBar.clientWidth - a.offsetWidth) / 2;
+      });
+    });
+  }, { rootMargin: "-35% 0px -60% 0px" });
+  sections.forEach(s => io.observe(s));
+  window.addEventListener("scroll", () => {
+    const max = document.documentElement.scrollHeight - innerHeight;
+    $("progress").style.width = (max > 0 ? (scrollY / max) * 100 : 0) + "%";
+  }, { passive: true });
+  document.addEventListener("keydown", e => {
+    if (e.target.closest("input, select, textarea")) return;
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    const y = scrollY + 90;
+    let idx = sections.findIndex(s => s.offsetTop > y);
+    if (idx === -1) idx = sections.length;
+    if (e.key === "ArrowLeft" && idx - 1 <= 0) { window.scrollTo({ top: 0 }); e.preventDefault(); return; }
+    const target = e.key === "ArrowRight" ? sections[idx] : sections[idx - 2];
+    if (target) { target.scrollIntoView(); e.preventDefault(); }
+  });
+
+  /* Table 7 ranges, drawn to scale */
+  const ranges = [
+    { name: "HW-827 pulse", unit: "bpm", min: 50, max: 110, obs: [73, 83.1], ref: [60, 85], refLbl: "60–85", verdict: "Within baseline", dp: 1 },
+    { name: "GSR sensor", unit: "µS", min: 0, max: 7, obs: [0.13, 5.96], verdict: "Successfully recorded", note: "Reference varies with physiological response", dp: 2 },
+    { name: "DS18B20 temperature", unit: "°C", min: 33, max: 38, obs: [34.55, 36.10], verdict: "Within threshold", note: "Skin temperature", dp: 2 },
+    { name: "MPU6050 motion", unit: "g", min: 0, max: 0.1, obs: [0.013, 0.050], lim: 0.08, verdict: "Within threshold", note: "Below 0.08 g", dp: 3 }
+  ];
+  $("ranges").innerHTML = ranges.map(r => {
+    const p = v => ((v - r.min) / (r.max - r.min)) * 100;
+    const ref = r.ref ? `<div class="ref" style="left:${p(r.ref[0])}%;width:${p(r.ref[1]) - p(r.ref[0])}%" title="Reference ${r.refLbl} ${r.unit}"></div>` : "";
+    const lim = r.lim !== undefined ? `<div class="lim" style="left:${p(r.lim)}%" title="Limit ${r.lim} ${r.unit}"></div>` : "";
+    return `<div class="range">
+      <div class="name"><b>${r.name}</b><span class="muted">${r.obs[0]}–${r.obs[1]} ${r.unit}</span></div>
+      <div class="track"><div class="rail"></div>${ref}${lim}<div class="obs" style="left:${p(r.obs[0])}%;width:${p(r.obs[1]) - p(r.obs[0])}%"></div>
+        <span class="lbl" style="left:0;transform:none">${r.min}</span><span class="lbl" style="left:100%;transform:translateX(-100%)">${r.max} ${r.unit}</span></div>
+      <div><span class="ok">${r.verdict}</span>${r.note ? `<div class="cite">${r.note}</div>` : ""}</div>
+    </div>`;
+  }).join("");
+
+  /* Table 5 grouped bars */
+  const bar = (v, c, max = 100) => `<div class="bar"><div style="width:${(v / max) * 100}%;background:${c}"></div></div>`;
+  const metrics = [["Accuracy", 84.80, 54.40], ["Precision", 75.80, 54.70], ["Recall", 80.20, 55.90], ["F1-score", 77.70, 54.60]];
+  $("modelBars").innerHTML = metrics.map(([m, cnn, lstm]) => `
+    <div class="metric-row"><span>${m}</span><div class="bars">${bar(cnn, "var(--accent)")}${bar(lstm, "var(--device)")}</div><span class="n-right">${cnn.toFixed(1)}<br>${lstm.toFixed(1)}</span></div>`).join("");
+
+  const fusion = [["Chance (4 levels)", 25.0, "var(--muted)"], ["Sensors only", 37.49, "var(--muted)"], ["Sensors + face", 54.40, "var(--accent)"]];
+  $("fusionBars").innerHTML = fusion.map(([n, v, c]) => `<div class="metric-row" style="grid-template-columns:120px minmax(0,1fr) 54px"><span>${n}</span>${bar(v, c)}<span class="n-right">${v.toFixed(1)}%</span></div>`).join("");
+
+  const emotions = [["Happy", 91], ["Surprise", 84], ["Neutral", 83], ["Sad", 82], ["Angry", 81], ["Fear", 73], ["Disgust", 68]];
+  $("emotionBars").innerHTML = emotions.map(([n, v]) => `<div class="metric-row"><span>${n}</span>${bar(v, v >= 80 ? "var(--accent)" : "var(--moderate)")}<span class="n-right">${v}%</span></div>`).join("");
+
+  /* LSTM confusion highlights (only figures stated in the manuscript) */
+  const L = ["Minimal", "Mild", "Moderate", "Severe"];
+  const known = { "0,0": 176, "1,1": 424, "2,2": 221, "3,3": 249, "0,1": 96, "2,1": 204, "2,3": 146, "3,2": 75 };
+  let cm = `<div class="h rh">actual ↓ / pred →</div>` + L.map(l => `<div class="h">${l}</div>`).join("");
+  L.forEach((row, i) => {
+    cm += `<div class="h rh">${row}</div>`;
+    L.forEach((_, j) => {
+      const v = known[`${i},${j}`];
+      cm += v === undefined ? `<div class="z">·</div>` : `<div class="${i === j ? "d" : "e"}">${v}</div>`;
+    });
+  });
+  $("cm").innerHTML = cm;
+
+  /* Table 8 */
+  const sensors = [["HW-827 pulse sensor", "Smartwatch", "1.80 bpm", "2.30%", 0.96], ["GSR sensor", "GSR reference probe", "0.22 µS", "8.50%", 0.97],
+                   ["DS18B20 temperature", "Clinical thermometer", "0.18 °C", "0.51%", 0.94], ["MPU6050 motion", "Smartwatch", "0.004 g", "12.00%", 0.90]];
+  $("sensorTable").innerHTML = sensors.map(([s, ref, mae, pe, r]) => `<tr><td><b>${s}</b></td><td>${ref}</td><td class="num">${mae}</td><td class="num">${pe}</td>
+    <td><div class="metric-row" style="grid-template-columns:minmax(0,1fr) 40px">${bar(r, "var(--accent)", 1)}<span class="n-right">${r.toFixed(2)}</span></div></td></tr>`).join("");
+
+  /* Problem → Objective → Result → Finding thread */
+  const thread = [
+    ["Improve rural screening with a secondary support tool for practitioners and BHWs", "Build a multimodal screening system; measure usability, satisfaction, agreement", "Prototype + GUI built; data from 30 participants", "Works as one integrated, supplementary screening platform"],
+    ["Overcome cloud dependence with a low-cost, real-time, offline system", "Build it low-cost and offline; measure latency and responsiveness", "Local processing on the M710Q with ESP32 wireless links", "Runs without the cloud on affordable hardware (latency still to document)"],
+    ["Combine face and biometrics with CNN-LSTM", "Integrate both; measure accuracy, precision, recall, F1", "CNN 84.80% · LSTM 54.40% (37.49% sensors-only)", "Face + body together beat either alone"],
+    ["How accurate are the sensors vs commercial devices?", "Compare with references; measure MAE, % error, r", "r = 0.90–0.97 across all four sensors", "Sensors are accurate enough to rely on"]
+  ];
+  const heads = ["", "Problem", "Objective", "Result", "Finding"];
+  $("thread").innerHTML = heads.map(h => `<div class="th">${h}</div>`).join("") + thread.map((row, i) =>
+    `<div class="idx" data-row="${i + 1}">${i + 1}</div>` + row.map((t, k) => `<div class="cell" data-row="${i + 1}"><b>${["SOP", "Objective", "Result 4." + (i + 1), "Finding"][k]}</b>${t}</div>`).join("")
+  ).join("");
+  const pick = n => {
+    $("thread").classList.toggle("focus", n > 0);
+    $("thread").querySelectorAll("[data-row]").forEach(el => el.classList.toggle("hit", +el.dataset.row === n));
+    $("threadTools").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.pick === n)));
+  };
+  $("threadTools").addEventListener("click", e => { const b = e.target.closest("[data-pick]"); if (b) pick(+b.dataset.pick); });
+  $("thread").addEventListener("click", e => { const c = e.target.closest("[data-row]"); if (c) pick(+c.dataset.row); });
+})();
+</script>
+</html>

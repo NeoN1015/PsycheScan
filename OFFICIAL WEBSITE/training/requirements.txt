@@ -1,0 +1,8 @@
+# Model training/export dependencies; use Python 3.10-3.11.
+pandas>=1.5,<3
+numpy==1.23.5
+scikit-learn>=1.2,<2
+tensorflow==2.15.1
+tf-keras==2.15.1
+tensorflow-decision-forests==1.8.1
+tensorflowjs==4.22.0

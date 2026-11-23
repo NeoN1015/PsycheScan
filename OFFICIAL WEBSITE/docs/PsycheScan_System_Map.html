@@ -1,0 +1,1205 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PsycheScan System Map</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@600;700;800&display=swap">
+<style>
+/* Layout: a guided tour down the signal path — sensor → packet → analysis → decision → screen → storage. */
+:root {
+  --bg: #f5f4fa;
+  --surface: #ffffff;
+  --surface-2: #eeebf8;
+  --fg: #1b1830;
+  --muted: #5d5a73;
+  --line: #dcd8ec;
+  --edge: #b3abd6;
+  --accent: #6247f0;
+  --accent-soft: #ebe7ff;
+  --device: #0a74b5;
+  --server: #b52f8f;
+  --minimal: #15803d;
+  --mild: #a16207;
+  --moderate: #c2410c;
+  --severe: #dc2626;
+  --display: "Manrope", "Segoe UI", system-ui, sans-serif;
+  --body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --radius: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #100e1b; --surface: #1a1729; --surface-2: #231f38; --fg: #ecebf5; --muted: #a8a4c1;
+    --line: #2f2a4a; --edge: #4d4675; --accent: #9b87ff; --accent-soft: #2a2350;
+    --device: #4fb4f0; --server: #ec6cc6; --minimal: #4ade80; --mild: #facc15; --moderate: #fb923c; --severe: #f87171;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #100e1b; --surface: #1a1729; --surface-2: #231f38; --fg: #ecebf5; --muted: #a8a4c1;
+  --line: #2f2a4a; --edge: #4d4675; --accent: #9b87ff; --accent-soft: #2a2350;
+  --device: #4fb4f0; --server: #ec6cc6; --minimal: #4ade80; --mild: #facc15; --moderate: #fb923c; --severe: #f87171;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.6; }
+h1, h2, h3, h4 { font-family: var(--display); line-height: 1.15; margin: 0; text-wrap: balance; letter-spacing: -0.015em; }
+p { margin: 0; }
+code, .mono { font-family: var(--mono); font-size: 0.86em; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.eyebrow { font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
+.muted { color: var(--muted); }
+
+/* Top bar */
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--surface); }
+.topbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.topbar .wrap { display: flex; align-items: center; gap: 14px; height: 58px; }
+.brandmark { font-family: var(--display); font-weight: 800; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+.brandmark span { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); transform: rotate(45deg); }
+.chapters { position: relative; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
+.chapters::-webkit-scrollbar { display: none; }
+.chapters a { white-space: nowrap; text-decoration: none; color: var(--muted); font-size: 0.82rem; padding: 6px 10px; border-radius: 999px; }
+.chapters a:hover { color: var(--fg); background: var(--surface-2); }
+.chapters a.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.icon-btn { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; height: 34px; padding: 0 10px; cursor: pointer; font-size: 0.8rem; white-space: nowrap; }
+.icon-btn:hover { border-color: var(--accent); }
+.progress { height: 2px; background: var(--accent); width: 0; transition: width 0.1s linear; }
+
+/* Hero */
+.hero { padding-block: 64px 40px; display: grid; gap: 28px; }
+.hero h1 { font-size: clamp(2.3rem, 6vw, 4rem); font-weight: 800; }
+.hero h1 em { font-style: normal; color: var(--accent); }
+.hero .study { font-family: var(--display); font-weight: 600; font-size: clamp(1rem, 1.8vw, 1.2rem); color: var(--muted); max-width: 62ch; }
+.hero .lede { font-size: 1.08rem; max-width: 62ch; }
+.byline { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 0.88rem; color: var(--muted); }
+.byline strong { color: var(--fg); }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.fact { background: var(--surface); padding: 16px 18px; display: grid; gap: 2px; }
+.fact b { font-family: var(--display); font-size: 1.9rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.fact span { font-size: 0.84rem; color: var(--muted); }
+
+/* Sections */
+section.chapter { padding-block: 64px; border-top: 1px solid var(--line); }
+.chapter-head { display: grid; gap: 10px; margin-bottom: 28px; max-width: 70ch; }
+.chapter-head h2 { font-size: clamp(1.6rem, 3.4vw, 2.2rem); font-weight: 800; }
+.chapter-head p { color: var(--muted); font-size: 1.02rem; }
+.say { margin-top: 22px; display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 12px; background: var(--accent-soft); font-size: 0.95rem; max-width: 80ch; }
+.say b { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); white-space: nowrap; padding-top: 3px; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.grid-2 > * { min-width: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; min-width: 0; }
+.panel h3 { font-size: 1.1rem; margin-bottom: 8px; }
+.formula { font-family: var(--mono); font-size: 0.82rem; background: var(--surface-2); border-radius: 10px; padding: 12px 14px; white-space: pre; overflow-x: auto; line-height: 1.7; }
+ul.clean { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+
+/* System map */
+.map-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 14px; cursor: pointer; font-weight: 600; font-size: 0.88rem; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn:hover { border-color: var(--accent); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.82rem; color: var(--muted); margin-left: auto; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.map-shell { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.map { position: relative; min-width: 1060px; padding: 18px 22px 22px; display: grid; grid-template-columns: repeat(6, minmax(140px, 1fr)); grid-auto-rows: minmax(64px, auto); column-gap: 46px; row-gap: 14px; }
+.map svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.col-label { grid-row: 1; font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); padding-bottom: 4px; border-bottom: 1px dashed var(--line); align-self: end; }
+.node { position: relative; z-index: 1; text-align: left; border: 1px solid var(--line); border-left: 4px solid var(--c); background: var(--surface); border-radius: 12px; padding: 9px 11px; cursor: pointer; display: grid; gap: 2px; align-self: center; transition: opacity 0.2s, box-shadow 0.2s, border-color 0.2s; }
+.node strong { font-family: var(--display); font-size: 0.92rem; }
+.node small { font-size: 0.74rem; color: var(--muted); line-height: 1.35; }
+.node:hover { box-shadow: 0 4px 16px color-mix(in srgb, var(--c) 22%, transparent); }
+.node.on { box-shadow: 0 0 0 2px var(--c); }
+.map.focus .node:not(.on):not(.near) { opacity: 0.32; }
+.edge { fill: none; stroke: var(--edge); stroke-width: 1.6; transition: stroke 0.2s, opacity 0.2s; }
+.map.focus .edge { opacity: 0.18; }
+.map.focus .edge.on { opacity: 1; stroke: var(--accent); stroke-width: 2.2; }
+.arrow { fill: var(--edge); }
+.arrow-on { fill: var(--accent); }
+.pulse { fill: var(--accent); }
+.map-foot { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 20px; margin-top: 16px; }
+.detail h3 { display: flex; align-items: center; gap: 8px; }
+.detail h3 i { width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
+.detail .files { margin-top: 10px; font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
+.links { margin-top: 12px; display: grid; gap: 6px; font-size: 0.86rem; }
+.links button { border: 0; background: var(--surface-2); border-radius: 8px; padding: 3px 8px; cursor: pointer; font-size: 0.82rem; }
+.links button:hover { background: var(--accent-soft); color: var(--accent); }
+.stepper { display: grid; gap: 10px; align-content: start; }
+.step-count { font-family: var(--mono); font-size: 0.75rem; color: var(--accent); letter-spacing: 0.08em; }
+.step-caption { font-family: var(--display); font-size: 1.15rem; font-weight: 700; }
+.step-note { color: var(--muted); font-size: 0.9rem; }
+.dots { display: flex; gap: 6px; }
+.dots span { width: 22px; height: 4px; border-radius: 2px; background: var(--line); }
+.dots span.done { background: var(--accent); }
+
+/* Timing ruler */
+.ruler { position: relative; min-width: 980px; height: 270px; margin: 0 30px; }
+.ruler .axis { position: absolute; left: 0; right: 0; top: 135px; height: 2px; background: var(--fg); opacity: 0.7; }
+.tick { position: absolute; top: 129px; width: 1px; height: 14px; background: var(--muted); }
+.tick span { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); font-family: var(--mono); font-size: 0.68rem; color: var(--muted); white-space: nowrap; }
+.mark { position: absolute; width: 0; }
+.mark::before { content: ""; position: absolute; left: -6px; top: 129px; width: 12px; height: 12px; border-radius: 50%; background: var(--c, var(--accent)); border: 2px solid var(--surface); }
+.mark .stem { position: absolute; left: 0; width: 1px; background: var(--c, var(--accent)); opacity: 0.6; }
+.mark .lbl { position: absolute; left: 0; transform: translateX(-50%); width: 118px; text-align: center; font-size: 0.74rem; line-height: 1.3; }
+.mark .lbl b { display: block; font-family: var(--mono); font-size: 0.78rem; color: var(--c, var(--accent)); }
+
+/* Device */
+.sensor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.sensor { background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--device); border-radius: var(--radius); padding: 18px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.sensor h3 { font-size: 1.05rem; }
+.kv { display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: 4px 10px; font-size: 0.85rem; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; }
+.packet { font-family: var(--mono); font-size: 0.84rem; line-height: 1.9; background: var(--surface-2); border-radius: 12px; padding: 16px; overflow-x: auto; white-space: nowrap; }
+.packet .k { color: var(--accent); cursor: pointer; border-radius: 4px; padding: 1px 2px; }
+.packet .k:hover, .packet .k.sel { background: var(--accent-soft); }
+.packet .v { color: var(--device); }
+.key-explain { margin-top: 12px; min-height: 48px; font-size: 0.92rem; }
+.key-explain b { font-family: var(--mono); color: var(--accent); }
+
+/* Pipelines */
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.chip { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 0.86rem; }
+.chip b { display: block; font-family: var(--display); font-size: 0.9rem; }
+.chip small { color: var(--muted); }
+.flow .to { color: var(--muted); font-family: var(--mono); }
+.flow-label { font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 18px 0 8px; }
+
+/* Severity */
+.sev { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 0.8rem; padding: 3px 10px; border-radius: 999px; color: var(--s); background: color-mix(in srgb, var(--s) 14%, transparent); }
+.sev::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--s); }
+.s-minimal { --s: var(--minimal); } .s-mild { --s: var(--mild); } .s-moderate { --s: var(--moderate); } .s-severe { --s: var(--severe); }
+table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.tabs button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 0.86rem; }
+.tabs button[aria-selected="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+.band { position: relative; height: 34px; border-radius: 8px; overflow: hidden; display: flex; margin: 30px 0 26px; }
+.band div { height: 100%; }
+.band .seg-minimal { background: color-mix(in srgb, var(--minimal) 30%, var(--surface)); }
+.band .seg-mild { background: color-mix(in srgb, var(--mild) 30%, var(--surface)); }
+.band .seg-moderate { background: color-mix(in srgb, var(--moderate) 30%, var(--surface)); }
+.band .seg-severe { background: color-mix(in srgb, var(--severe) 30%, var(--surface)); }
+.band-wrap { position: relative; }
+.needle { position: absolute; top: 22px; width: 2px; height: 50px; background: var(--fg); transform: translateX(-1px); transition: left 0.15s; }
+.needle span { position: absolute; top: -24px; left: 50%; transform: translateX(-50%); font-family: var(--mono); font-size: 0.78rem; font-weight: 600; white-space: nowrap; background: var(--fg); color: var(--bg); padding: 1px 6px; border-radius: 5px; }
+.band-scale { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-top: -18px; }
+.control { display: grid; gap: 6px; margin-top: 14px; }
+.control label { display: flex; justify-content: space-between; gap: 10px; font-size: 0.88rem; }
+.control label output { font-family: var(--mono); font-weight: 600; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.toggle { display: flex; align-items: center; gap: 8px; font-size: 0.88rem; margin-top: 12px; cursor: pointer; }
+.toggle input { accent-color: var(--accent); width: 16px; height: 16px; }
+.verdict { display: grid; gap: 10px; align-content: start; }
+.verdict .big { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.verdict .big .sev { font-size: 1rem; padding: 6px 14px; }
+.reason { font-size: 0.92rem; }
+.reason div { padding: 8px 0; border-bottom: 1px dashed var(--line); }
+.reason div:last-child { border: 0; }
+
+/* Fusion */
+.score-big { font-family: var(--display); font-size: 3.4rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.stack { display: flex; height: 16px; border-radius: 8px; overflow: hidden; background: var(--surface-2); margin-top: 6px; }
+.stack div { height: 100%; transition: width 0.2s; }
+.stack-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 0.8rem; color: var(--muted); margin-top: 8px; }
+.stack-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+select { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
+
+/* LSTM */
+.seq { display: grid; grid-template-columns: 70px repeat(60, minmax(7px, 1fr)); gap: 2px; min-width: 620px; font-family: var(--mono); font-size: 0.7rem; align-items: center; }
+.seq .cell { height: 16px; border-radius: 2px; }
+.seq .rowlab { color: var(--muted); }
+.layers { display: grid; gap: 8px; }
+.layer { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-size: 0.88rem; }
+.layer b { font-family: var(--display); }
+.layer span { font-family: var(--mono); font-size: 0.76rem; color: var(--muted); }
+.layer.lstm { border-left: 4px solid var(--accent); }
+.prob { display: grid; grid-template-columns: 78px minmax(0, 1fr) 42px; gap: 8px; align-items: center; font-size: 0.84rem; }
+.prob .bar { height: 10px; border-radius: 5px; background: var(--surface-2); overflow: hidden; }
+.prob .bar div { height: 100%; background: var(--s); }
+.prob .num { font-family: var(--mono); text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Workflow */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; counter-reset: s; }
+.steps li { counter-increment: s; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 16px 16px 58px; position: relative; font-size: 0.9rem; }
+.steps li::before { content: counter(s); position: absolute; left: 16px; top: 14px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-family: var(--display); font-weight: 800; }
+.steps li b { display: block; font-family: var(--display); font-size: 0.98rem; margin-bottom: 2px; }
+.phase { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin-top: 18px; }
+.phase div { padding: 14px 16px; background: var(--surface); font-size: 0.88rem; }
+.phase div + div { border-left: 1px solid var(--line); }
+.phase b { font-family: var(--display); display: block; }
+
+/* Results */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.tile .metric { font-family: var(--display); font-size: 2.6rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; color: var(--accent); }
+.tile h3 { font-size: 1rem; }
+.tag { display: inline-block; font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 8px; border-radius: 6px; background: var(--surface-2); color: var(--muted); justify-self: start; }
+.compare { display: grid; gap: 6px; margin-top: 4px; }
+.compare .row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 48px; gap: 8px; align-items: center; font-size: 0.8rem; }
+.compare .bar { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.compare .bar div { height: 100%; background: var(--muted); }
+.compare .row.me .bar div { background: var(--accent); }
+.compare .row.me { font-weight: 600; }
+
+/* Files */
+.files-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.files-grid .panel { border-top: 3px solid var(--c); }
+.file { display: grid; gap: 1px; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+.file:last-child { border: 0; }
+.file code { color: var(--fg); font-weight: 500; }
+.file span { font-size: 0.82rem; color: var(--muted); }
+
+footer { border-top: 1px solid var(--line); padding-block: 40px 56px; }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; align-items: end; }
+.creator { font-family: var(--display); font-size: 1.3rem; font-weight: 800; }
+.creator small { display: block; font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); font-weight: 500; }
+
+@media (max-width: 760px) {
+  .map-foot { grid-template-columns: 1fr; }
+  .phase div + div { border-left: 0; border-top: 1px solid var(--line); }
+  .brandmark b { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; }
+}
+</style>
+
+<header class="topbar">
+  <div class="wrap">
+    <div class="brandmark"><span></span><b>PsycheScan</b></div>
+    <nav class="chapters" id="chapters" aria-label="Sections">
+      <a href="#map">System map</a>
+      <a href="#clock">Timing</a>
+      <a href="#device">Device</a>
+      <a href="#intake">Intake</a>
+      <a href="#face">Face</a>
+      <a href="#thresholds">Thresholds</a>
+      <a href="#fusion">Integrated score</a>
+      <a href="#lstm">LSTM</a>
+      <a href="#session">Session</a>
+      <a href="#storage">Storage</a>
+      <a href="#results">Results</a>
+      <a href="#files">Files</a>
+      <a href="#ethics">Ethics</a>
+    </nav>
+    <button class="icon-btn" id="themeBtn" type="button" title="Switch light or dark">Theme</button>
+  </div>
+  <div class="progress" id="progress"></div>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div class="eyebrow">CpE26 · COEN3133 Capstone · Colegio de Muntinlupa</div>
+    <h1>How <em>PsycheScan</em> works</h1>
+    <p class="study">Real-Time Early Detection System for Mental Health Using Vital Signs Sensors Applying Hybrid CNN-LSTM Algorithms for In-Depth Analysis of Stress and Anxiety Parameters</p>
+    <p class="lede">PsycheScan screens a participant for stress and anxiety by combining two independent evidence streams: four vital signs from an ESP32 sensor device, and facial analysis from a USB webcam. Both are fused into one Integrated score on a four-level scale, and an LSTM network reports the sustained trend. Everything runs locally on one mini PC.</p>
+    <div class="byline"><span>Created by <strong>Gerald C. Esplana</strong></span><span>Adviser: Engr. Ricrey E. Marquez, PCpE</span><span>Use ← → to move between sections</span></div>
+    <div class="facts">
+      <div class="fact"><b>4</b><span>vital signs: HR, GSR, temperature, motion</span></div>
+      <div class="fact"><b>7</b><span>emotions read from the face</span></div>
+      <div class="fact"><b>500 ms</b><span>between sensor packets</span></div>
+      <div class="fact"><b>60 s</b><span>of vitals per LSTM prediction</span></div>
+      <div class="fact"><b>4</b><span>levels: Minimal, Mild, Moderate, Severe</span></div>
+      <div class="fact"><b>0</b><span>cloud services: data stays on the PC</span></div>
+    </div>
+  </div>
+
+  <!-- 1. SYSTEM MAP -->
+  <section class="chapter" id="map">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">The big picture</div>
+        <h2>Every part, and how they connect</h2>
+        <p>Read the map left to right: measure, send, interpret, decide, show, keep. Click any block to see what it does, which file holds it, and what it talks to. Press <b>Play the flow</b> to walk one reading through the whole system.</p>
+      </div>
+      <div class="map-tools">
+        <button class="btn primary" id="playBtn" type="button">▶ Play the flow</button>
+        <button class="btn" id="prevBtn" type="button">← Step</button>
+        <button class="btn" id="nextBtn" type="button">Step →</button>
+        <button class="btn" id="resetBtn" type="button">Show all</button>
+        <div class="legend">
+          <span><i style="background:var(--device)"></i>Hardware</span>
+          <span><i style="background:var(--accent)"></i>Browser dashboard</span>
+          <span><i style="background:var(--server)"></i>Local server</span>
+        </div>
+      </div>
+      <div class="map-shell scroll-x">
+        <div class="map" id="mapGrid">
+          <svg id="mapSvg" aria-hidden="true">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow" d="M0,0 L10,5 L0,10 z"/></marker>
+              <marker id="arrowOn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow-on" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <g id="edgeLayer"></g>
+            <g id="pulseLayer"></g>
+          </svg>
+        </div>
+      </div>
+      <div class="map-foot">
+        <div class="panel detail" id="detail"></div>
+        <div class="panel stepper">
+          <div class="step-count" id="stepCount">THE FLOW · 7 STEPS</div>
+          <div class="step-caption" id="stepCaption">Press Play to follow one reading from the skin to the database.</div>
+          <div class="step-note" id="stepNote">Or click a block on the map to see its connections.</div>
+          <div class="dots" id="stepDots"></div>
+        </div>
+      </div>
+      <div class="say"><b>Say it</b><span>"The device only measures. Every decision, from validation to the severity level, happens in the dashboard, so the thresholds live in one place: <code>project_config.js</code>."</span></div>
+    </div>
+  </section>
+
+  <!-- 2. CLOCK -->
+  <section class="chapter" id="clock">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Timing</div>
+        <h2>The system's clock, from 10 ms to 60 s</h2>
+        <p>Each part runs at its own rate. Fast loops catch heartbeats and movement; slower loops smooth the picture into records and trends. The scale is logarithmic: each step to the right is about ten times longer.</p>
+      </div>
+      <div class="map-shell scroll-x" style="padding-block:10px">
+        <div class="ruler" id="ruler"><div class="axis"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. DEVICE -->
+  <section class="chapter" id="device">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Measure · ESP32 firmware</div>
+        <h2>Four sensors, one packet every 500 ms</h2>
+        <p>The ESP32 reads each sensor at its own rate, checks that it touches the skin, and broadcasts the latest values on USB serial, Bluetooth LE and Wi-Fi at the same time. Firmware: <code>ESP32/ESP32_81porsyento/ESP32_81porsyento.ino</code>.</p>
+      </div>
+      <div class="sensor-grid">
+        <article class="sensor"><h3>Pulse sensor</h3><dl class="kv"><dt>Measures</dt><dd>Heart rate (bpm)</dd><dt>Pin</dt><dd>ADC · GPIO 35</dd><dt>Read every</dt><dd>10 ms (100 Hz)</dd><dt>Contact</dt><dd>Signal swing &gt; 80 ADC counts</dd></dl><div class="formula">BPM = 60000 ÷ beat interval</div><p class="muted" style="font-size:.84rem">Adaptive-threshold beat detection. Resets after 2.5 s without a beat.</p></article>
+        <article class="sensor"><h3>GSR module</h3><dl class="kv"><dt>Measures</dt><dd>Skin conductance (µS)</dd><dt>Pin</dt><dd>ADC · GPIO 34</dd><dt>Read every</dt><dd>1 s</dd><dt>Contact</dt><dd>Raw average &gt; 50</dd></dl><div class="formula">µS = raw ÷ 4095 × 10</div><p class="muted" style="font-size:.84rem">Average of 10 readings. Sweat raises conductance under stress.</p></article>
+        <article class="sensor"><h3>DS18B20</h3><dl class="kv"><dt>Measures</dt><dd>Peripheral skin °C</dd><dt>Pin</dt><dd>1-Wire · GPIO 4</dd><dt>Read every</dt><dd>1 s</dd><dt>Contact</dt><dd>Reading 28–40 °C</dd></dl><div class="formula">drop = first on-skin °C − now</div><p class="muted" style="font-size:.84rem">Skin temperature falls under stress, so the drop is what matters.</p></article>
+        <article class="sensor"><h3>MPU6050</h3><dl class="kv"><dt>Measures</dt><dd>Motion (g)</dd><dt>Pin</dt><dd>I²C · SDA 21 / SCL 22</dd><dt>Read every</dt><dd>50 ms</dd><dt>Contact</dt><dd>Reported while it responds</dd></dl><div class="formula">|√(ax² + ay² + az²) − 1 g|</div><p class="muted" style="font-size:.84rem">Movement with gravity removed. Restlessness is a stress cue.</p></article>
+      </div>
+      <div class="grid-2" style="margin-top:20px">
+        <div class="panel">
+          <h3>The packet</h3>
+          <p class="muted" style="font-size:.88rem;margin-bottom:12px">Click a field to see what it means.</p>
+          <div class="packet" id="packet"></div>
+          <div class="key-explain" id="keyExplain"></div>
+        </div>
+        <div class="panel">
+          <h3>Three links, one format</h3>
+          <table>
+            <tr><th>Link</th><th>Details</th></tr>
+            <tr><td><b>USB serial</b></td><td>Web Serial at 115200 baud, one JSON object per line</td></tr>
+            <tr><td><b>Bluetooth LE</b></td><td>Device <code>ESP32_StressMon</code>, Nordic UART service; partial lines are buffered until the newline</td></tr>
+            <tr><td><b>Wi-Fi</b></td><td>WebSocket server on port 81; the dashboard reconnects after 1 s, doubling up to 30 s</td></tr>
+          </table>
+          <p class="muted" style="font-size:.86rem;margin-top:12px">With no skin contact a value is sent as 0 with its contact flag false, and the dashboard discards it.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. INTAKE -->
+  <section class="chapter" id="intake">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Interpret · sensor intake</div>
+        <h2>Only trusted readings reach the score</h2>
+        <p>Every packet, from any link, passes the same checks before it can affect a level. Code: <code>applyIncomingPacket</code>, <code>normalizePacket</code>, <code>isValidSensorValue</code> in <code>main_extension.js</code>.</p>
+      </div>
+      <div class="flow">
+        <div class="chip"><b>Packet arrives</b><small>USB · BLE · Wi-Fi</small></div><span class="to">→</span>
+        <div class="chip"><b>Normalize</b><small>aliases: eda→gsr, pulse→hr</small></div><span class="to">→</span>
+        <div class="chip"><b>Validate</b><small>range + skin contact</small></div><span class="to">→</span>
+        <div class="chip"><b>Freshness</b><small>silent 6 s → cleared</small></div><span class="to">→</span>
+        <div class="chip"><b>Score &amp; record</b><small>levels, history, charts</small></div>
+      </div>
+      <div class="grid-2" style="margin-top:22px">
+        <div class="panel">
+          <h3>Accepted ranges</h3>
+          <table>
+            <tr><th>Signal</th><th>Accepted</th></tr>
+            <tr><td>Heart rate</td><td class="num">25–240 bpm</td></tr>
+            <tr><td>GSR</td><td class="num">0–100 µS</td></tr>
+            <tr><td>Temperature</td><td class="num">15–45 °C</td></tr>
+            <tr><td>Motion</td><td class="num">0–16 g</td></tr>
+          </table>
+          <p class="muted" style="font-size:.86rem;margin-top:10px">Out of range, no contact, or a packet over 8 KB: the value is dropped.</p>
+        </div>
+        <div class="panel">
+          <h3>When a sensor goes quiet</h3>
+          <ul class="clean">
+            <li>The card keeps the <b>last valid reading</b>, shown faded and marked as held, so the screen and charts stay stable.</li>
+            <li>The sensor's badge changes to <b>Waiting</b> or <b>Disconnected</b>.</li>
+            <li>Held values are tagged in history and records, and are <b>kept out of the LSTM and the baseline</b>, so stale data never trains a decision.</li>
+            <li>The score uses <b>live</b> sensors only.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. FACE -->
+  <section class="chapter" id="face">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Interpret · camera</div>
+        <h2>Reading the face: emotion and fatigue</h2>
+        <p>Pretrained convolutional networks from face-api.js run in the browser on every detection tick (default every 160 ms). One branch reads the expression; the other measures visual fatigue from the pixels around the eyes.</p>
+      </div>
+      <div class="flow-label">Emotion branch</div>
+      <div class="flow">
+        <div class="chip"><b>Video frame</b><small>USB webcam</small></div><span class="to">→</span>
+        <div class="chip"><b>Face detector</b><small>SSD MobileNet V1 · Tiny fallback</small></div><span class="to">→</span>
+        <div class="chip"><b>Landmark net</b><small>68 points</small></div><span class="to">→</span>
+        <div class="chip"><b>Expression CNN</b><small>7 probabilities</small></div><span class="to">→</span>
+        <div class="chip"><b>Smoothing</b><small>moving average, α 0.40</small></div><span class="to">→</span>
+        <div class="chip"><b>Dominant emotion</b><small>+ confidence</small></div>
+      </div>
+      <div class="flow-label">Fatigue branch</div>
+      <div class="flow">
+        <div class="chip"><b>68 landmarks</b><small>locate regions</small></div><span class="to">→</span>
+        <div class="chip"><b>Sample regions</b><small>under-eye, cheek, forehead, eye corners</small></div><span class="to">→</span>
+        <div class="chip"><b>Compare to cheek</b><small>same frame cancels lighting</small></div><span class="to">→</span>
+        <div class="chip"><b>Eyebag · wrinkle · fatigue</b><small>0–100</small></div>
+      </div>
+      <div class="grid-2" style="margin-top:22px">
+        <div class="panel">
+          <h3>Fatigue formulas</h3>
+          <div class="formula">brightness  Y = 0.299 R + 0.587 G + 0.114 B
+detail      = clamp((eye width − 18) ÷ 22, 0.15, 1)
+eyebag      = clamp(cheek Y − under-eye Y, 0, 25) × 4.6 × detail
+wrinkle     = clamp(texture − cheek texture, 0, 14) × 9.2 × detail
+fatigue     = 0.58 × eyebag + 0.42 × wrinkle</div>
+        </div>
+        <div class="panel">
+          <h3>Facial bands</h3>
+          <table>
+            <tr><th>Score</th><th>Level</th></tr>
+            <tr><td class="num">0–24</td><td><span class="sev s-minimal">Minimal</span></td></tr>
+            <tr><td class="num">25–49</td><td><span class="sev s-mild">Mild</span></td></tr>
+            <tr><td class="num">50–74</td><td><span class="sev s-moderate">Moderate</span></td></tr>
+            <tr><td class="num">75–100</td><td><span class="sev s-severe">Severe</span></td></tr>
+          </table>
+          <p class="muted" style="font-size:.86rem;margin-top:10px">No face found: the emotions reset to zero, the label reads "No Face", and the face stream leaves the score until it returns.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. THRESHOLDS -->
+  <section class="chapter" id="thresholds">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Decide · Table 2</div>
+        <h2>Biomarker thresholds, live</h2>
+        <p>Each vital sign gets its own level. Heart rate and GSR are judged by the absolute value, and once above the Minimal range, also by the rise over the patient's baseline; the more severe wins. Move the sliders to try it.</p>
+      </div>
+      <div class="tabs" role="tablist" id="bioTabs">
+        <button role="tab" type="button" data-k="hr" aria-selected="true">Heart rate</button>
+        <button role="tab" type="button" data-k="gsr" aria-selected="false">GSR</button>
+        <button role="tab" type="button" data-k="temp" aria-selected="false">Temperature drop</button>
+        <button role="tab" type="button" data-k="motion" aria-selected="false">Motion</button>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <div class="band-wrap"><div class="band" id="band"></div><div class="needle" id="needle"><span id="needleLbl"></span></div></div>
+          <div class="band-scale"><span id="scaleMin"></span><span id="scaleMax"></span></div>
+          <div class="control"><label for="bioValue"><span id="valueLbl">Reading</span><output id="bioValueOut"></output></label><input type="range" id="bioValue"></div>
+          <div id="baseCtl">
+            <label class="toggle"><input type="checkbox" id="bioHasBase" checked> Patient has a captured baseline</label>
+            <div class="control"><label for="bioBase"><span>Baseline</span><output id="bioBaseOut"></output></label><input type="range" id="bioBase"></div>
+          </div>
+        </div>
+        <div class="panel verdict">
+          <div class="eyebrow">Result</div>
+          <div class="big"><span class="sev" id="bioVerdict">Minimal</span><span class="muted" id="bioVerdictSub"></span></div>
+          <div class="reason" id="bioReason"></div>
+        </div>
+      </div>
+      <div class="panel scroll-x" style="margin-top:20px;padding:6px 8px">
+        <table style="min-width:640px">
+          <tr><th>Biomarker</th><th><span class="sev s-minimal">Minimal</span></th><th><span class="sev s-mild">Mild</span></th><th><span class="sev s-moderate">Moderate</span></th><th><span class="sev s-severe">Severe</span></th></tr>
+          <tr><td><b>Heart rate</b> (bpm)</td><td class="num">60–85</td><td class="num">86–95 or +10%</td><td class="num">96–105 or +15–20%</td><td class="num">&gt; 105 or &gt; +20%</td></tr>
+          <tr><td><b>GSR</b> (µS)</td><td class="num">0.9–1.1</td><td class="num">1.2–2.4 or +20–40%</td><td class="num">2.5–4.0 or +50–100%</td><td class="num">&gt; 4.0 or &gt; +100%</td></tr>
+          <tr><td><b>Skin temp drop</b> (°C)</td><td class="num">0.0 to −0.2</td><td class="num">−0.3 to −0.8</td><td class="num">−0.9 to −1.5</td><td class="num">≤ −1.6</td></tr>
+          <tr><td><b>Motion</b> (RMS, g)</td><td class="num">0.00–0.05</td><td class="num">0.06–0.10</td><td class="num">0.11–0.20</td><td class="num">&gt; 0.20</td></tr>
+        </table>
+      </div>
+      <div class="say"><b>Say it</b><span>"A reading inside the Minimal range is always Minimal. The percentage rule only flags a reading that is already above it, so a patient with a low resting heart rate is still caught when it climbs past 85."</span></div>
+    </div>
+  </section>
+
+  <!-- 7. FUSION -->
+  <section class="chapter" id="fusion">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Decide · score-level fusion</div>
+        <h2>One Integrated score from three risks</h2>
+        <p>Emotion, visual fatigue and the sensor level are each turned into a 0–100 risk and averaged with fixed weights. Only the streams that are present count, and their weights are rescaled, so the score still means something with no face or no sensor. Code: <code>computeAssessment</code> in <code>main.js</code>.</p>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Try it</h3>
+          <label class="toggle"><input type="checkbox" id="fFace" checked> Face detected</label>
+          <div class="control"><label for="fEmotion"><span>Emotion risk</span><output id="fEmotionOut"></output></label><input type="range" id="fEmotion" min="0" max="100" value="40"></div>
+          <div class="control"><label for="fFatigue"><span>Visual fatigue</span><output id="fFatigueOut"></output></label><input type="range" id="fFatigue" min="0" max="100" value="20"></div>
+          <div class="control"><label for="fSensor"><span>Sensor level (vote)</span></label>
+            <select id="fSensor"><option value="none">No live sensor</option><option value="0">Minimal → 0</option><option value="33" selected>Mild → 33</option><option value="66">Moderate → 66</option><option value="100">Severe → 100</option></select>
+          </div>
+        </div>
+        <div class="panel verdict">
+          <div class="eyebrow">Integrated score</div>
+          <div class="big"><span class="score-big" id="fScore">0</span><span class="sev" id="fLevel">Minimal</span></div>
+          <div class="stack" id="fStack"></div>
+          <div class="stack-legend"><span><i style="background:var(--accent)"></i>Emotion × 0.42</span><span><i style="background:var(--device)"></i>Fatigue × 0.18</span><span><i style="background:var(--server)"></i>Sensors × 0.40</span></div>
+          <div class="formula" id="fMath" style="white-space:pre-wrap"></div>
+        </div>
+      </div>
+      <div class="grid-2" style="margin-top:20px">
+        <div class="panel"><h3>Where each risk comes from</h3><div class="formula">emotion = 100 × (sad + angry + fearful
+          + 0.8 × disgusted + 0.35 × surprised)
+          + 0.3 × confidence if the dominant
+            emotion is negative      (max 100)
+fatigue = visual fatigue score (0–100)
+sensors = 0 · 33 · 66 · 100 from the vote</div></div>
+        <div class="panel"><h3>Sensor vote and levels</h3><ul class="clean"><li>Each live sensor votes its own level; <b>GSR casts two votes</b>.</li><li>The most severe level with any vote becomes the sensor level.</li><li>Integrated levels: <span class="sev s-minimal">0–24</span> <span class="sev s-mild">25–44</span> <span class="sev s-moderate">45–69</span> <span class="sev s-severe">70–100</span></li><li><b>Trend</b>: last 6 scores vs the 6 before: over +4 Rising, under −4 Falling.</li></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. LSTM -->
+  <section class="chapter" id="lstm">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Decide · temporal model</div>
+        <h2>The LSTM reads the last minute, not the last second</h2>
+        <p>The LSTM is the temporal half of the CNN-LSTM design. Every 5 s it takes the last 60 seconds of all four vital signs and classifies the sustained level, so a brief spike, like a finger slipping off the sensor, doesn't change its answer. It runs in a background worker and is reported beside the Integrated score, not inside it.</p>
+      </div>
+      <div class="panel scroll-x">
+        <h3 style="margin-bottom:12px">Input: 60 seconds × 4 signals <span class="tag" style="vertical-align:2px">Illustrative sequence</span></h3>
+        <div class="seq" id="seq"></div>
+      </div>
+      <div class="grid-2" style="margin-top:20px">
+        <div class="panel">
+          <h3>Network (TensorFlow.js worker)</h3>
+          <div class="layers">
+            <div class="layer"><b>Input</b><span>60 × [hr, gsr, temp, motion], normalized</span></div>
+            <div class="layer lstm"><b>LSTM</b><span>64 units</span></div>
+            <div class="layer"><b>Dropout</b><span>0.2</span></div>
+            <div class="layer lstm"><b>LSTM</b><span>32 units</span></div>
+            <div class="layer"><b>Dropout</b><span>0.2</span></div>
+            <div class="layer"><b>Dense softmax</b><span>4 levels</span></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Output <span class="tag" style="vertical-align:2px">Example</span></h3>
+          <div style="display:grid;gap:10px;margin-top:10px" id="probs"></div>
+          <h3 style="margin-top:20px">When it is allowed to predict</h3>
+          <ul class="clean">
+            <li>Each second uses the latest complete reading, at most 3 s old.</li>
+            <li>At least <b>80%</b> of the 60 seconds are fresh; until then the badge counts up, e.g. "16/60 S".</li>
+            <li>Held (disconnected) readings never enter the sequence.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9. SESSION -->
+  <section class="chapter" id="session">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Show · a session</div>
+        <h2>One session, start to end</h2>
+        <p>What the operator does, in order. Every reading is tied to one patient profile.</p>
+      </div>
+      <ol class="steps">
+        <li><b>Start the server</b>Run <code>start_server.bat</code> and set the operator password.</li>
+        <li><b>Sign in</b>Open <code>http://localhost:8000</code>. Saved data loads from <code>/api/bootstrap</code>.</li>
+        <li><b>Choose the patient</b>Select or add a profile, then fit the sensors.</li>
+        <li><b>Connect the device</b>USB, Bluetooth or Wi-Fi. Packets start every 500 ms.</li>
+        <li><b>Start the camera</b>Load Models, Start Camera. Detection every 160 ms.</li>
+        <li><b>Capture the baseline</b>3–5 minutes at rest. Averages are stored on the profile.</li>
+        <li><b>Monitor</b>Levels, charts and the LSTM trend update live; records save every 3 s.</li>
+        <li><b>Review and export</b>Status Summary, then CSV or PDF from Reports.</li>
+      </ol>
+      <div class="phase">
+        <div><b>Baseline phase</b>Resting readings become the reference: HR and GSR averages for the percentage rules, and temperature for the drop.</div>
+        <div><b>Questionnaire phase</b>Live readings are compared with the baseline; the Live Monitoring Hub shows the difference.</div>
+        <div><b>Records</b>Saved at most every 3 s when a face (≥ 30%) or a sensor is present, each with a matching report row.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10. STORAGE -->
+  <section class="chapter" id="storage">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Keep · server and database</div>
+        <h2>Two copies, never overwritten</h2>
+        <p>The browser keeps a working copy so monitoring continues if the server blinks. <code>server.py</code> keeps the permanent copy in SQLite. Each save carries a revision number; if another window saved first, the server answers 409 and the browser reloads instead of overwriting.</p>
+      </div>
+      <div class="flow">
+        <div class="chip"><b>Dashboard state</b><small>profiles, records, reports, settings</small></div><span class="to">→</span>
+        <div class="chip"><b>Browser cache</b><small>on every change</small></div><span class="to">+</span>
+        <div class="chip"><b>POST /api/sync</b><small>350 ms after a change, with revision</small></div><span class="to">+</span>
+        <div class="chip"><b>POST /api/telemetry</b><small>≤ 100 samples, every 5 s</small></div><span class="to">→</span>
+        <div class="chip" style="border-color:var(--server)"><b>SQLite</b><small>dashboard.sqlite3</small></div>
+      </div>
+      <div class="grid-2" style="margin-top:22px">
+        <div class="panel scroll-x">
+          <h3>API</h3>
+          <table>
+            <tr><th>Endpoint</th><th>Purpose</th></tr>
+            <tr><td><code>POST /api/login</code></td><td>Password → session token (8 h)</td></tr>
+            <tr><td><code>GET /api/bootstrap</code></td><td>Load everything saved, plus the revision</td></tr>
+            <tr><td><code>POST /api/sync</code></td><td>Save the working state if the revision matches</td></tr>
+            <tr><td><code>POST /api/telemetry</code></td><td>Store batches of samples and records</td></tr>
+            <tr><td><code>POST /api/profiles/*</code></td><td>Create, rename, delete patients (unique names)</td></tr>
+            <tr><td><code>GET /api/health</code></td><td>Table and row counts</td></tr>
+          </table>
+        </div>
+        <div class="panel">
+          <h3>Protection</h3>
+          <ul class="clean">
+            <li>Operator password set at startup; token lives only in the open tab.</li>
+            <li>5 failed sign-ins in 60 s blocks that address briefly.</li>
+            <li>Requests must come from the same site; bodies capped at 1 MB.</li>
+            <li>Local test mode accepts only the same computer.</li>
+            <li>Readings older than 30 days are removed at startup.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11. RESULTS -->
+  <section class="chapter" id="results">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Evidence</div>
+        <h2>What the models scored</h2>
+        <p>Three models, three different tests. Know which number belongs to which model before the panel asks.</p>
+      </div>
+      <div class="tiles">
+        <div class="tile">
+          <span class="tag">Research CNN · EfficientNet-B0</span>
+          <div class="metric">84.80%</div>
+          <h3>Emotion validation accuracy</h3>
+          <p class="muted" style="font-size:.88rem">7 emotions, 1,533 validation images. Macro F1 77.7%. Best: Happy (F1 93.8%). Weakest: Fear (60.7%), Disgust (65.1%).</p>
+          <p style="font-size:.84rem"><b>Note:</b> trained separately in PyTorch. The live dashboard uses face-api.js's expression network because it runs fast and offline in the browser.</p>
+        </div>
+        <div class="tile">
+          <span class="tag">Research LSTM · 30 s × 13 features</span>
+          <div class="metric">54.4%</div>
+          <h3>5-fold patient-wise cross-validation</h3>
+          <div class="compare">
+            <div class="row"><span>Chance (4 levels)</span><div class="bar"><div style="width:25%"></div></div><span class="mono">25.0%</span></div>
+            <div class="row"><span>Always "Mild"</span><div class="bar"><div style="width:34.6%"></div></div><span class="mono">34.6%</span></div>
+            <div class="row"><span>Sensors only</span><div class="bar"><div style="width:37.5%"></div></div><span class="mono">37.5%</span></div>
+            <div class="row me"><span>Sensors + face</span><div class="bar"><div style="width:54.4%"></div></div><span class="mono">54.4%</span></div>
+          </div>
+          <p class="muted" style="font-size:.86rem">30 participants, 1,966 windows. 78.7% of errors were an adjacent level. Adding the face lifted accuracy by 17 points, which supports the hybrid design.</p>
+        </div>
+        <div class="tile">
+          <span class="tag">Live LSTM · 60 s × 4 vitals</span>
+          <div class="metric">91.3%</div>
+          <h3>Agreement with the Table 2 rule</h3>
+          <p class="muted" style="font-size:.88rem">Bootstrap model trained on 16,000 synthetic 60-second sequences inside the Table 2 ranges, with spikes, ramps and noise. Measured on held-out synthetic sequences.</p>
+          <p style="font-size:.84rem"><b>Note:</b> not clinically validated. <code>train_lstm.py</code> retrains it on labelled sessions with the same architecture.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12. FILES -->
+  <section class="chapter" id="files">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Where it lives</div>
+        <h2>Files, grouped by layer</h2>
+        <p>The same colors as the system map.</p>
+      </div>
+      <div class="files-grid">
+        <div class="panel" style="--c:var(--device)"><h3>Hardware</h3>
+          <div class="file"><code>ESP32_81porsyento.ino</code><span>Firmware: sensors, contact checks, USB/BLE/Wi-Fi broadcast</span></div>
+          <div class="file"><code>test_4sensors.ino</code><span>Bench test for the four sensors</span></div>
+          <div class="file"><code>sensor_examples/</code><span>Example packets</span></div>
+        </div>
+        <div class="panel" style="--c:var(--accent)"><h3>Browser dashboard</h3>
+          <div class="file"><code>index.html · styles.css</code><span>Pages, dialogs, themes, layout</span></div>
+          <div class="file"><code>project_config.js</code><span>All thresholds, weights, timings</span></div>
+          <div class="file"><code>main.js</code><span>State, charts, classification, fusion, fatigue, baseline</span></div>
+          <div class="file"><code>main_extension.js</code><span>Patients, records, face loop, BLE/Wi-Fi, packets</span></div>
+          <div class="file"><code>main_backend.js</code><span>Sign-in, sync, telemetry queue</span></div>
+          <div class="file"><code>lstm_predictor.js · lstm_worker.js</code><span>LSTM input and inference</span></div>
+          <div class="file"><code>models/ · tfjs_lstm_model/</code><span>Face CNN weights, LSTM weights</span></div>
+        </div>
+        <div class="panel" style="--c:var(--server)"><h3>Server and training</h3>
+          <div class="file"><code>server.py</code><span>Web server, API, sign-in, SQLite</span></div>
+          <div class="file"><code>start_server.bat</code><span>Checks Python, asks for the password</span></div>
+          <div class="file"><code>data/dashboard.sqlite3</code><span>Live database (kept off GitHub)</span></div>
+          <div class="file"><code>train_lstm*.py · lstm_tfjs_export.py</code><span>LSTM training and browser export</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13. ETHICS -->
+  <section class="chapter" id="ethics">
+    <div class="wrap">
+      <div class="chapter-head">
+        <div class="eyebrow">Boundaries</div>
+        <h2>Screening support, not diagnosis</h2>
+      </div>
+      <div class="grid-2">
+        <div class="panel"><h3>Responsible use</h3><ul class="clean"><li>A screening and decision-support tool. A qualified professional makes the final interpretation.</li><li>Participants aged 18–65 who gave informed consent.</li><li>All data stays on the local machine, in line with RA 10173, the Data Privacy Act of 2012.</li></ul></div>
+        <div class="panel"><h3>Known limits and next steps</h3><ul class="clean"><li>30 participants from one clinic; more sites and people are the clear next step.</li><li>Integrate the trained EfficientNet-B0 CNN into the live dashboard.</li><li>Retrain the live LSTM on labelled participant sessions.</li><li>Validate the levels against clinician ratings.</li></ul></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="creator"><small>Created by</small>Gerald C. Esplana</div>
+    <div class="muted" style="font-size:.86rem">PsycheScan · CpE26 · COEN3133 Capstone · Colegio de Muntinlupa, Computer Engineering Department</div>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- Theme ---------- */
+  $("themeBtn").addEventListener("click", () => {
+    const root = document.documentElement;
+    const isDark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = isDark ? "light" : "dark";
+    requestAnimationFrame(drawEdges);
+  });
+
+  /* ---------- Chapter nav, progress, keyboard ---------- */
+  const sections = [...document.querySelectorAll("section.chapter")];
+  const navLinks = [...document.querySelectorAll("#chapters a")];
+  // Only the tab strip scrolls to keep the active tab visible. (scrollIntoView here
+  // also nudged the page itself and interrupted the reader's own scrolling.)
+  const navBar = $("chapters");
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (!e.isIntersecting) return;
+      navLinks.forEach(a => {
+        const on = a.getAttribute("href") === "#" + e.target.id;
+        a.classList.toggle("active", on);
+        if (on) navBar.scrollLeft = a.offsetLeft - (navBar.clientWidth - a.offsetWidth) / 2;
+      });
+    });
+  }, { rootMargin: "-35% 0px -60% 0px" });
+  sections.forEach(s => io.observe(s));
+  window.addEventListener("scroll", () => {
+    const max = document.documentElement.scrollHeight - innerHeight;
+    $("progress").style.width = (max > 0 ? (scrollY / max) * 100 : 0) + "%";
+  }, { passive: true });
+  document.addEventListener("keydown", e => {
+    if (e.target.closest("input, select, textarea")) return;
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    const y = scrollY + 90;
+    let idx = sections.findIndex(s => s.offsetTop > y);
+    if (idx === -1) idx = sections.length;
+    const target = e.key === "ArrowRight" ? sections[idx] : sections[Math.max(0, idx - 2)];
+    if (e.key === "ArrowLeft" && idx - 1 <= 0) { window.scrollTo({ top: 0 }); e.preventDefault(); return; }
+    if (target) { target.scrollIntoView(); e.preventDefault(); }
+  });
+
+  /* ---------- System map ---------- */
+  const L = { hw: "var(--device)", web: "var(--accent)", srv: "var(--server)" };
+  const cols = ["Measure", "Send", "Interpret", "Decide", "Show", "Keep"];
+  const nodes = {
+    hr:     { c: 1, r: 2, layer: "hw", t: "Pulse sensor", s: "Heart rate · GPIO 35 · 10 ms", d: "Finds each beat on the pulse wave with an adaptive threshold. BPM = 60000 ÷ beat interval; resets after 2.5 s without a beat.", f: "ESP32_81porsyento.ino · readPulseSensor" },
+    gsr:    { c: 1, r: 3, layer: "hw", t: "GSR module", s: "Skin conductance · GPIO 34 · 1 s", d: "Averages 10 readings and scales them to microsiemens. Sweat under stress raises conductance.", f: "ESP32_81porsyento.ino · readGSR" },
+    temp:   { c: 1, r: 4, layer: "hw", t: "DS18B20", s: "Skin temperature · GPIO 4 · 1 s", d: "Digital °C reading, valid on skin between 28 and 40 °C. The drop from the first on-skin reading is sent as tempDrop.", f: "ESP32_81porsyento.ino · readTemperature" },
+    motion: { c: 1, r: 5, layer: "hw", t: "MPU6050", s: "Motion · I²C · 50 ms", d: "Accelerometer magnitude with gravity removed: |√(ax²+ay²+az²) − 1 g|.", f: "ESP32_81porsyento.ino · readMPU6050" },
+    cam:    { c: 1, r: 7, layer: "hw", t: "USB webcam", s: "1280×720 video", d: "Supplies the face for the expression CNN and the fatigue estimate.", f: "main_extension.js · startCamera" },
+    esp32:  { c: 2, r: 3, layer: "hw", t: "ESP32", s: "Sample · contact check · JSON", d: "Reads each sensor at its own rate, checks skin contact, and broadcasts one JSON packet every 500 ms. It only measures; every decision happens in the dashboard.", f: "ESP32_81porsyento.ino · broadcastSensorData" },
+    link:   { c: 2, r: 5, layer: "hw", t: "Three links", s: "USB serial · Bluetooth LE · Wi-Fi :81", d: "The same packet goes out on all three at once. The dashboard uses whichever is connected; Wi-Fi reconnects with back-off up to 30 s.", f: "main.js · connectSerial  ·  main_extension.js · connectBle, connectWs" },
+    intake: { c: 3, r: 4, layer: "web", t: "Sensor intake", s: "Normalize · validate · hold", d: "Accepts field aliases, rejects out-of-range or no-contact values, clears a sensor silent for 6 s, and keeps the last valid reading on screen marked as held.", f: "main_extension.js · applyIncomingPacket, normalizePacket" },
+    face:   { c: 3, r: 7, layer: "web", t: "Face CNNs", s: "Detect → 68 landmarks → 7 emotions", d: "SSD MobileNet V1 (or Tiny Face Detector) finds the face, the landmark net places 68 points, and the expression net returns seven emotion probabilities, smoothed over time.", f: "main_extension.js · runDetectionFrame  ·  main.js · smoothExpressions" },
+    fatigue:{ c: 3, r: 8, layer: "web", t: "Visual fatigue", s: "Eyebag · wrinkle · fatigue 0–100", d: "Compares under-eye darkness and forehead and eye-corner texture against the cheek in the same frame, so lighting cancels out.", f: "main.js · computeVisualFatigue" },
+    lstm:   { c: 4, r: 2, layer: "web", t: "LSTM worker", s: "60 s × 4 signals → trend", d: "Every 5 s, resamples the last minute of vitals to 1 Hz and classifies the sustained level in a background TensorFlow.js worker.", f: "lstm_predictor.js · lstm_worker.js" },
+    thresh: { c: 4, r: 4, layer: "web", t: "Threshold classifier", s: "Table 2 level per sensor", d: "Labels each vital sign Minimal to Severe. HR and GSR add the rise over baseline once above the Minimal range; temperature uses the drop; motion uses a 10 s median. Then the sensors vote (GSR twice).", f: "main.js · classifyBiomarkerSeverity, classifySensorStress" },
+    fusion: { c: 4, r: 7, layer: "web", t: "Integrated score", s: "Weighted fusion 0–100", d: "Combines emotion risk (0.42), visual fatigue (0.18) and sensor risk (0.40), using only the streams that are present.", f: "main.js · computeAssessment" },
+    ui:     { c: 5, r: 3, layer: "web", t: "Dashboard pages", s: "Charts · levels · summary", d: "Dashboard, Live Monitoring Hub, Sensors, Status Summary, Patient Profiles, Reports and Settings show the live values, levels, trends and baseline comparison.", f: "index.html · main.js · renderAll, updateCharts" },
+    records:{ c: 5, r: 7, layer: "web", t: "Records & reports", s: "Snapshot at most every 3 s", d: "Saves emotion, vitals, fatigue, score, level and a short narrative when a face or sensor is present. Exports to CSV and PDF.", f: "main_extension.js · captureRecord  ·  main.js · exportCsv, savePdf" },
+    server: { c: 6, r: 5, layer: "srv", t: "server.py", s: "Local API · sign-in", d: "Serves the dashboard, checks the operator password and request origin, and saves data with a revision number so two windows never overwrite each other.", f: "server.py · _store_sync, _store_telemetry" },
+    db:     { c: 6, r: 6, layer: "srv", t: "SQLite", s: "dashboard.sqlite3", d: "Permanent store for profiles, records, reports and telemetry. Readings older than 30 days are removed at startup.", f: "server.py · init_db" },
+    cache:  { c: 6, r: 8, layer: "web", t: "Browser cache", s: "Working copy", d: "Keeps profiles, records, reports and settings in the browser so monitoring continues if the server is briefly unreachable.", f: "main_extension.js · persistCollections" }
+  };
+  const edges = [
+    ["hr", "esp32", "pulse wave"], ["gsr", "esp32", "conductance"], ["temp", "esp32", "°C"], ["motion", "esp32", "acceleration"],
+    ["esp32", "link", "JSON packet every 500 ms"], ["link", "intake", "same packet on any link"],
+    ["cam", "face", "video frame every 160 ms"], ["face", "fatigue", "68 landmarks"],
+    ["intake", "thresh", "validated vitals"], ["intake", "lstm", "1 Hz history"],
+    ["thresh", "fusion", "sensor risk 0 / 33 / 66 / 100"], ["face", "fusion", "emotion risk"], ["fatigue", "fusion", "fatigue risk"],
+    ["fusion", "ui", "score and level"], ["lstm", "ui", "sustained level every 5 s"], ["thresh", "ui", "level per sensor"],
+    ["fusion", "records", "snapshot every 3 s"], ["records", "server", "/api/sync · /api/telemetry"], ["records", "cache", "on every change"], ["server", "db", "SQL"]
+  ];
+  const steps = [
+    { cap: "The sensors are read at their own rates", note: "Pulse every 10 ms, motion every 50 ms, GSR and temperature every second, each with a skin-contact check.", e: [0, 1, 2, 3] },
+    { cap: "Every 500 ms the ESP32 sends one JSON packet", note: "Over USB serial, Bluetooth LE and Wi-Fi at the same time. The dashboard listens on whichever is connected.", e: [4, 5] },
+    { cap: "Readings are checked before they count", note: "Range, skin contact and freshness. Valid vitals go to the threshold classifier now, and into the history the LSTM reads.", e: [8, 9] },
+    { cap: "Meanwhile, the camera feeds the face models", note: "Detect the face, place 68 landmarks, read 7 emotions, and measure eye bags and wrinkles.", e: [6, 7] },
+    { cap: "Three risks become one Integrated score", note: "Emotion × 0.42, fatigue × 0.18, sensors × 0.40, using only the streams that are present.", e: [10, 11, 12] },
+    { cap: "Levels and trends reach the screen", note: "The Integrated score, each sensor's level, and the LSTM's 60-second trend update the dashboard.", e: [13, 14, 15] },
+    { cap: "Each snapshot is saved twice", note: "In the browser right away, and on the server's SQLite database with a revision check.", e: [16, 17, 18, 19] }
+  ];
+
+  const grid = $("mapGrid"), svg = $("mapSvg"), edgeLayer = $("edgeLayer"), pulseLayer = $("pulseLayer");
+  const NS = "http://www.w3.org/2000/svg";
+  cols.forEach((label, i) => {
+    const el = document.createElement("div");
+    el.className = "col-label";
+    el.style.gridColumn = i + 1;
+    el.textContent = label;
+    grid.appendChild(el);
+  });
+  Object.entries(nodes).forEach(([id, n]) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "node";
+    b.dataset.id = id;
+    b.style.gridColumn = n.c;
+    b.style.gridRow = n.r;
+    b.style.setProperty("--c", L[n.layer]);
+    b.innerHTML = `<strong>${n.t}</strong><small>${n.s}</small>`;
+    b.addEventListener("click", () => { stopPlay(); select(id); });
+    grid.appendChild(b);
+    n.el = b;
+  });
+  edges.forEach(e => {
+    const p = document.createElementNS(NS, "path");
+    p.setAttribute("class", "edge");
+    p.setAttribute("marker-end", "url(#arrow)");
+    edgeLayer.appendChild(p);
+    e.path = p;
+  });
+
+  function box(el) {
+    return { l: el.offsetLeft, t: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight };
+  }
+  function drawEdges() {
+    svg.setAttribute("viewBox", `0 0 ${grid.scrollWidth} ${grid.scrollHeight}`);
+    edges.forEach(([a, b, , ], i) => {
+      const A = box(nodes[a].el), B = box(nodes[b].el), p = edges[i].path;
+      let d;
+      if (nodes[a].c === nodes[b].c) {
+        const x = A.l + A.w / 2, down = B.t > A.t;
+        const y1 = down ? A.t + A.h : A.t, y2 = down ? B.t - 4 : B.t + B.h + 4;
+        d = `M${x},${y1} L${x},${y2}`;
+      } else {
+        const x1 = A.l + A.w, y1 = A.t + A.h / 2, x2 = B.l - 4, y2 = B.t + B.h / 2, dx = Math.max(24, (x2 - x1) / 2);
+        d = `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
+      }
+      p.setAttribute("d", d);
+    });
+  }
+  new ResizeObserver(drawEdges).observe(grid);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawEdges);
+
+  function clearFocus() {
+    grid.classList.remove("focus");
+    Object.values(nodes).forEach(n => n.el.classList.remove("on", "near"));
+    edges.forEach(e => { e.path.classList.remove("on"); e.path.setAttribute("marker-end", "url(#arrow)"); });
+  }
+  function lightEdges(list) {
+    grid.classList.add("focus");
+    list.forEach(i => {
+      const e = edges[i];
+      e.path.classList.add("on");
+      e.path.setAttribute("marker-end", "url(#arrowOn)");
+      nodes[e[0]].el.classList.add("on");
+      nodes[e[1]].el.classList.add("on");
+    });
+  }
+  function select(id) {
+    clearFocus();
+    const n = nodes[id];
+    const inc = [], out = [];
+    edges.forEach((e, i) => {
+      if (e[0] === id) { out.push(i); }
+      if (e[1] === id) { inc.push(i); }
+    });
+    lightEdges([...inc, ...out]);
+    Object.values(nodes).forEach(m => { if (m.el.classList.contains("on") && m !== n) { m.el.classList.remove("on"); m.el.classList.add("near"); } });
+    n.el.classList.add("on");
+    const chip = i => { const e = edges[i]; const other = e[0] === id ? e[1] : e[0]; return `<div><button type="button" data-go="${other}">${nodes[other].t}</button> <span class="muted">${e[2]}</span></div>`; };
+    const layerName = { hw: "Hardware", web: "Browser dashboard", srv: "Local server" }[n.layer];
+    $("detail").style.setProperty("--c", L[n.layer]);
+    $("detail").innerHTML = `
+      <div class="eyebrow">${layerName} · ${cols[n.c - 1]}</div>
+      <h3><i></i>${n.t}</h3>
+      <p>${n.d}</p>
+      <div class="files">${n.f}</div>
+      <div class="links">
+        ${inc.length ? `<div class="muted" style="font-size:.78rem">RECEIVES FROM</div>${inc.map(chip).join("")}` : ""}
+        ${out.length ? `<div class="muted" style="font-size:.78rem;margin-top:4px">SENDS TO</div>${out.map(chip).join("")}` : ""}
+      </div>`;
+    $("detail").querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => select(b.dataset.go)));
+  }
+
+  // Play the flow
+  let stepIdx = -1, playTimer = null, anims = [];
+  steps.forEach(() => $("stepDots").appendChild(document.createElement("span")));
+  function animatePulses(list) {
+    anims.forEach(cancelAnimationFrame); anims = [];
+    pulseLayer.innerHTML = "";
+    if (reduceMotion) return;
+    list.forEach(i => {
+      const path = edges[i].path, len = path.getTotalLength();
+      const dot = document.createElementNS(NS, "circle");
+      dot.setAttribute("r", "5"); dot.setAttribute("class", "pulse");
+      pulseLayer.appendChild(dot);
+      const t0 = performance.now(), dur = 1100;
+      const tick = now => {
+        const k = Math.min(1, (now - t0) / dur), pt = path.getPointAtLength(len * k);
+        dot.setAttribute("cx", pt.x); dot.setAttribute("cy", pt.y);
+        dot.setAttribute("opacity", k < 1 ? 1 : 0);
+        if (k < 1) anims.push(requestAnimationFrame(tick));
+      };
+      anims.push(requestAnimationFrame(tick));
+    });
+  }
+  function showStep(i) {
+    stepIdx = Math.max(0, Math.min(steps.length - 1, i));
+    const s = steps[stepIdx];
+    clearFocus();
+    lightEdges(s.e);
+    animatePulses(s.e);
+    $("stepCount").textContent = `STEP ${stepIdx + 1} OF ${steps.length}`;
+    $("stepCaption").textContent = s.cap;
+    $("stepNote").textContent = s.note;
+    [...$("stepDots").children].forEach((d, k) => d.classList.toggle("done", k <= stepIdx));
+    const first = nodes[edges[s.e[0]][0]];
+    select_detail_quiet(first);
+  }
+  function select_detail_quiet(n) {
+    const id = Object.keys(nodes).find(k => nodes[k] === n);
+    const layerName = { hw: "Hardware", web: "Browser dashboard", srv: "Local server" }[n.layer];
+    $("detail").style.setProperty("--c", L[n.layer]);
+    $("detail").innerHTML = `<div class="eyebrow">${layerName} · ${cols[n.c - 1]}</div><h3><i></i>${n.t}</h3><p>${n.d}</p><div class="files">${n.f}</div><div class="links"><div><button type="button" data-go="${id}">Show its connections</button></div></div>`;
+    $("detail").querySelector("[data-go]").addEventListener("click", () => { stopPlay(); select(id); });
+  }
+  function stopPlay() {
+    clearInterval(playTimer); playTimer = null;
+    $("playBtn").textContent = "▶ Play the flow";
+  }
+  $("playBtn").addEventListener("click", () => {
+    if (playTimer) { stopPlay(); return; }
+    showStep(stepIdx >= steps.length - 1 ? 0 : stepIdx + 1);
+    $("playBtn").textContent = "❚❚ Pause";
+    playTimer = setInterval(() => {
+      if (stepIdx >= steps.length - 1) { stopPlay(); return; }
+      showStep(stepIdx + 1);
+    }, 2600);
+  });
+  $("nextBtn").addEventListener("click", () => { stopPlay(); showStep(stepIdx + 1); });
+  $("prevBtn").addEventListener("click", () => { stopPlay(); showStep(stepIdx <= 0 ? 0 : stepIdx - 1); });
+  $("resetBtn").addEventListener("click", () => {
+    stopPlay(); clearFocus(); pulseLayer.innerHTML = ""; stepIdx = -1;
+    [...$("stepDots").children].forEach(d => d.classList.remove("done"));
+    $("stepCount").textContent = "THE FLOW · 7 STEPS";
+    $("stepCaption").textContent = "Press Play to follow one reading from the skin to the database.";
+    $("stepNote").textContent = "Or click a block on the map to see its connections.";
+    select("fusion"); clearFocus();
+  });
+  select("fusion"); clearFocus();
+
+  /* ---------- Timing ruler ---------- */
+  const marks = [
+    [10, "Pulse sampled", "var(--device)"], [50, "Motion sampled", "var(--device)"], [160, "Face analysed", "var(--accent)"],
+    [350, "Sync after a change", "var(--server)"], [500, "ESP32 sends a packet", "var(--device)"], [1000, "GSR & temp read · history sample", "var(--device)"],
+    [2000, "Screen refresh loop", "var(--accent)"], [3000, "At most one record", "var(--accent)"], [5000, "LSTM predicts · telemetry upload", "var(--accent)"],
+    [6000, "Silent sensor cleared", "var(--accent)"], [60000, "LSTM window", "var(--accent)"]
+  ];
+  const lo = Math.log10(10), hi = Math.log10(60000), pos = ms => ((Math.log10(ms) - lo) / (hi - lo)) * 100;
+  const fmt = ms => ms < 1000 ? `${ms} ms` : `${ms / 1000} s`;
+  const ruler = $("ruler");
+  [10, 100, 1000, 10000, 60000].forEach(ms => {
+    const t = document.createElement("div");
+    t.className = "tick"; t.style.left = pos(ms) + "%";
+    t.innerHTML = `<span>${fmt(ms)}</span>`;
+    ruler.appendChild(t);
+  });
+  const lanes = [{ top: 4, stemTop: 52, stemH: 78 }, { top: 66, stemTop: 104, stemH: 26 }, { top: 168, stemTop: 141, stemH: 24 }, { top: 222, stemTop: 141, stemH: 78 }];
+  marks.forEach(([ms, label, c], i) => {
+    const lane = lanes[i % 4];
+    const m = document.createElement("div");
+    m.className = "mark"; m.style.left = pos(ms) + "%"; m.style.setProperty("--c", c);
+    m.innerHTML = `<div class="stem" style="top:${lane.stemTop}px;height:${lane.stemH}px"></div><div class="lbl" style="top:${lane.top}px"><b>${fmt(ms)}</b>${label}</div>`;
+    ruler.appendChild(m);
+  });
+
+  /* ---------- Packet explainer ---------- */
+  const packet = [
+    ["hr", "78.0", "Heart rate in bpm. 0 when no valid beat is found."],
+    ["finger", "true", "A finger is on the pulse sensor. If false, the heart rate is discarded."],
+    ["gsr", "1.05", "Skin conductance in µS. 0 when the electrodes are off the skin."],
+    ["gsrSkin", "true", "The GSR electrodes touch the skin."],
+    ["temp", "34.2", "Skin temperature in °C. 0 when the probe isn't on skin (outside 28–40 °C)."],
+    ["tempDrop", "0.10", "Drop in °C since skin contact began. The threshold classifier uses this directly."],
+    ["tempSkin", "true", "The temperature probe is on the skin."],
+    ["motion", "0.041", "Movement in g with gravity removed."],
+    ["max30102", "true", "Pulse sensor contact flag (legacy name kept for compatibility)."],
+    ["gsrConnected", "true", "GSR contact flag."],
+    ["ds18b20", "true", "Temperature probe contact flag."],
+    ["mpu6050", "true", "The motion sensor is responding."]
+  ];
+  $("packet").innerHTML = "{" + packet.map(([k, v], i) => `<span class="k" tabindex="0" data-i="${i}">"${k}"</span>:<span class="v">${v}</span>${i < packet.length - 1 ? ", " : ""}${i % 3 === 2 && i < packet.length - 1 ? "<br>&nbsp;" : ""}`).join("") + "}";
+  const explain = i => {
+    $("packet").querySelectorAll(".k").forEach(k => k.classList.toggle("sel", +k.dataset.i === i));
+    $("keyExplain").innerHTML = `<b>${packet[i][0]}</b> · ${packet[i][2]}`;
+  };
+  $("packet").querySelectorAll(".k").forEach(k => {
+    const i = +k.dataset.i;
+    k.addEventListener("click", () => explain(i));
+    k.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); explain(i); } });
+  });
+  explain(0);
+
+  /* ---------- Threshold explorer (same rules as main.js) ---------- */
+  const EPS = 1e-9, LEVELS = ["Minimal", "Mild", "Moderate", "Severe"];
+  const bio = {
+    hr: { label: "Heart rate", unit: "bpm", min: 40, max: 130, step: 1, mild: 86, mod: 96, sevAbove: 105, minimalMax: 85, rel: [10, 15, 20], v: 81, base: 65, bMin: 50, bMax: 100, dp: 0 },
+    gsr: { label: "Skin conductance", unit: "µS", min: 0, max: 6, step: 0.05, mild: 1.2, mod: 2.5, sevAbove: 4.0, minimalMax: 1.1, rel: [20, 50, 100], v: 1.0, base: 0.6, bMin: 0.2, bMax: 3, dp: 2 },
+    temp: { label: "Drop from baseline", unit: "°C", min: 0, max: 2.5, step: 0.1, mild: 0.3, mod: 0.9, sevMin: 1.6, v: 0.4, dp: 1 },
+    motion: { label: "Motion", unit: "g", min: 0, max: 0.35, step: 0.005, mild: 0.06, mod: 0.11, sevAbove: 0.2, v: 0.04, dp: 3 }
+  };
+  let bk = "hr";
+  const level = (v, mild, mod, sevAbove, sevMin) => {
+    if (!Number.isFinite(v)) return 0;
+    const severe = Number.isFinite(sevAbove) ? v > sevAbove + EPS : v >= sevMin - EPS;
+    if (severe) return 3;
+    if (v >= mod - EPS) return 2;
+    if (v >= mild - EPS) return 1;
+    return 0;
+  };
+  const sevClass = l => "sev s-" + LEVELS[l].toLowerCase();
+  function renderBand() {
+    const b = bio[bk];
+    const sevStart = b.sevAbove ?? b.sevMin;
+    const span = b.max - b.min, w = x => ((Math.min(Math.max(x, b.min), b.max) - b.min) / span) * 100;
+    const segs = [["minimal", b.min, b.mild], ["mild", b.mild, b.mod], ["moderate", b.mod, sevStart], ["severe", sevStart, b.max]];
+    $("band").innerHTML = segs.map(([k, a, z]) => `<div class="seg-${k}" style="width:${w(z) - w(a)}%"></div>`).join("");
+    $("scaleMin").textContent = `${b.min} ${b.unit}`;
+    $("scaleMax").textContent = `${b.max} ${b.unit}`;
+    const vi = $("bioValue");
+    vi.min = b.min; vi.max = b.max; vi.step = b.step; vi.value = b.v;
+    const hasRel = !!b.rel;
+    $("baseCtl").hidden = !hasRel;
+    if (hasRel) { const bi = $("bioBase"); bi.min = b.bMin; bi.max = b.bMax; bi.step = b.step; bi.value = b.base; }
+    $("valueLbl").textContent = b.label;
+    updateBio();
+  }
+  function updateBio() {
+    const b = bio[bk];
+    const v = +$("bioValue").value; b.v = v;
+    const f = x => x.toFixed(b.dp);
+    $("bioValueOut").textContent = `${f(v)} ${b.unit}`;
+    const pct = ((v - b.min) / (b.max - b.min)) * 100;
+    $("needle").style.left = pct + "%";
+    $("needleLbl").textContent = f(v);
+    const abs = level(v, b.mild, b.mod, b.sevAbove, b.sevMin);
+    let final = abs;
+    const lines = [`<div>Absolute band: <b>${f(v)} ${b.unit}</b> → <span class="${sevClass(abs)}">${LEVELS[abs]}</span></div>`];
+    if (b.rel) {
+      const base = +$("bioBase").value; b.base = base;
+      $("bioBaseOut").textContent = `${f(base)} ${b.unit}`;
+      if (!$("bioHasBase").checked) {
+        lines.push(`<div class="muted">No baseline yet, so only the absolute band applies.</div>`);
+      } else if (v <= b.minimalMax + EPS) {
+        lines.push(`<div>${f(v)} ${b.unit} is inside the Minimal range (≤ ${b.minimalMax}), so the rise over baseline is <b>not applied</b>.</div>`);
+      } else {
+        const rise = ((v - base) / base) * 100;
+        const rl = level(rise, b.rel[0], b.rel[1], b.rel[2]);
+        lines.push(`<div>Rise over baseline ${f(base)}: <b>${rise >= 0 ? "+" : ""}${rise.toFixed(0)}%</b> → <span class="${sevClass(rl)}">${LEVELS[rl]}</span></div>`);
+        final = Math.max(abs, rl);
+        lines.push(`<div class="muted">The more severe of the two is used.</div>`);
+      }
+      $("bioBase").disabled = !$("bioHasBase").checked;
+    }
+    if (bk === "temp") lines.push(`<div class="muted">Skin temperature falls under stress, so a bigger drop means a higher level.</div>`);
+    if (bk === "motion") lines.push(`<div class="muted">On the dashboard the level is the median of the last 10 s, raised one step if 70% of the last 30 s stays at or above it.</div>`);
+    if (bk === "hr" && v < 60) lines.push(`<div class="muted">Below 60 bpm is not flagged by this table.</div>`);
+    const verdict = $("bioVerdict");
+    verdict.className = sevClass(final);
+    verdict.textContent = LEVELS[final];
+    $("bioVerdictSub").textContent = `${b.label} ${f(v)} ${b.unit}`;
+    $("bioReason").innerHTML = lines.join("");
+  }
+  $("bioTabs").addEventListener("click", e => {
+    const t = e.target.closest("[data-k]"); if (!t) return;
+    bk = t.dataset.k;
+    $("bioTabs").querySelectorAll("[data-k]").forEach(x => x.setAttribute("aria-selected", x === t ? "true" : "false"));
+    renderBand();
+  });
+  ["bioValue", "bioBase", "bioHasBase"].forEach(id => $(id).addEventListener("input", updateBio));
+  renderBand();
+
+  /* ---------- Fusion calculator ---------- */
+  function updateFusion() {
+    const face = $("fFace").checked;
+    const e = +$("fEmotion").value, fa = +$("fFatigue").value, sv = $("fSensor").value;
+    $("fEmotionOut").textContent = e; $("fFatigueOut").textContent = fa;
+    $("fEmotion").disabled = $("fFatigue").disabled = !face;
+    const parts = [];
+    if (face) { parts.push(["Emotion", e, 0.42, "var(--accent)"]); parts.push(["Fatigue", fa, 0.18, "var(--device)"]); }
+    if (sv !== "none") parts.push(["Sensors", +sv, 0.40, "var(--server)"]);
+    const wsum = parts.reduce((s, p) => s + p[2], 0);
+    const score = wsum ? parts.reduce((s, p) => s + p[1] * p[2], 0) / wsum : 0;
+    const lvl = score >= 70 ? 3 : score >= 45 ? 2 : score >= 25 ? 1 : 0;
+    $("fScore").textContent = Math.round(score);
+    $("fLevel").className = sevClass(lvl);
+    $("fLevel").textContent = LEVELS[lvl];
+    $("fStack").innerHTML = parts.map(p => `<div style="width:${wsum ? (p[1] * p[2] / wsum) : 0}%;background:${p[3]}"></div>`).join("");
+    $("fMath").textContent = wsum
+      ? `(${parts.map(p => `${p[2].toFixed(2)} × ${p[1]}`).join(" + ")}) ÷ ${wsum.toFixed(2)} = ${score.toFixed(1)}`
+      : "No face and no live sensor: nothing to score yet.";
+  }
+  ["fFace", "fEmotion", "fFatigue", "fSensor"].forEach(id => $(id).addEventListener("input", updateFusion));
+  updateFusion();
+
+  /* ---------- LSTM illustration ---------- */
+  const seq = $("seq");
+  const rows = [["HR", s => 0.35 + 0.25 * (s / 60) + 0.08 * Math.sin(s / 3)], ["GSR", s => 0.25 + 0.45 * Math.max(0, (s - 20) / 40) + 0.05 * Math.sin(s)],
+                ["Temp", s => 0.3 + 0.15 * (s / 60) + 0.04 * Math.cos(s / 4)], ["Motion", s => (s === 33 || s === 34 ? 0.9 : 0.15 + 0.06 * Math.sin(s * 1.7))]];
+  rows.forEach(([name, fn]) => {
+    const lab = document.createElement("div"); lab.className = "rowlab"; lab.textContent = name; seq.appendChild(lab);
+    for (let s = 0; s < 60; s++) {
+      const c = document.createElement("div"); c.className = "cell";
+      const v = Math.max(0.06, Math.min(1, fn(s)));
+      c.style.background = `color-mix(in srgb, var(--accent) ${Math.round(v * 100)}%, var(--surface-2))`;
+      c.title = `${name}, second ${s + 1}`;
+      seq.appendChild(c);
+    }
+  });
+  const axis = document.createElement("div"); axis.className = "rowlab"; seq.appendChild(axis);
+  for (let s = 0; s < 60; s++) {
+    const t = document.createElement("div"); t.className = "rowlab";
+    t.style.fontSize = "0.6rem";
+    t.textContent = (s + 1) % 15 === 0 ? `${s + 1}s` : "";
+    seq.appendChild(t);
+  }
+  const probs = [["Minimal", 0.09, "minimal"], ["Mild", 0.61, "mild"], ["Moderate", 0.25, "moderate"], ["Severe", 0.05, "severe"]];
+  $("probs").innerHTML = probs.map(([n, p, k]) => `<div class="prob s-${k}"><span>${n}</span><div class="bar"><div style="width:${p * 100}%"></div></div><span class="num">${Math.round(p * 100)}%</span></div>`).join("");
+})();
+</script>
+
+</html>
